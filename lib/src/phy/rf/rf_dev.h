@@ -76,6 +76,16 @@ static srsran_rf_plugin_t plugin_skiq  = {"", NULL, &srsran_rf_dev_skiq};
 #endif
 #endif
 
+/* Define implementation for Lime */
+#ifdef ENABLE_LIMESDR
+#ifdef ENABLE_RF_PLUGINS
+static srsran_rf_plugin_t plugin_skiq = {"libsrsran_rf_limesdr.so", NULL, NULL};
+#else
+#include "rf_limesdr_impl.h"
+static srsran_rf_plugin_t plugin_limesdr  = {"", NULL, &srsran_rf_dev_limesdr};
+#endif
+#endif
+
 //#define ENABLE_DUMMY_DEV
 
 #ifdef ENABLE_DUMMY_DEV
@@ -113,6 +123,9 @@ static srsran_rf_plugin_t* rf_plugins[] = {
 #endif
 #ifdef ENABLE_SIDEKIQ
     &plugin_skiq,
+#endif
+#ifdef ENABLE_LIMESDR
+    &plugin_lime,
 #endif
 #ifdef ENABLE_DUMMY_DEV
     &plugin_dummy,
