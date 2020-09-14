@@ -284,6 +284,9 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     printf("%s\n", list[i]);
   }
 
+  if(args == NULL){
+    args = "";
+  }
   // Open device
   lms_device_t* sdr               = NULL;
   int           lms_index         = 0;
