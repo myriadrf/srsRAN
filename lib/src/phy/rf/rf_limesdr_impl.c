@@ -645,7 +645,7 @@ double rf_lime_set_rx_srate(void* h, double rate)
   }
 
   handler->rx_rate = srate;
-  printf("RX sampling rate: %.2f\n", rate / 1e6);
+  printf("RX sampling rate: %.2f\n", srate / 1e6);
 
   if (stream_active) {
     rf_lime_start_rx_stream(handler, true);
