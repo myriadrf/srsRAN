@@ -171,12 +171,14 @@ double get_channel_bw(double rate)
 #ifdef FORCE_STANDARD_RATE
   return rate / 1.536;
 #else
+  
+  double rounded_rate = round(rate / 100) * 100;
   if (rate < 5.76e6)
     return rate / 1.536;
-  else if (rate == 15.36e6)
+  else if (rounded_rate == 15.36e6)
     return 15e6;
   else
-    return rate / 1.152;
+    return rounded_rate / 1.152;
 #endif
 }
 
