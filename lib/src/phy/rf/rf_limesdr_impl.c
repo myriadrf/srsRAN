@@ -634,8 +634,9 @@ double rf_lime_set_rx_srate(void* h, double rate)
   if (stream_active) {
     rf_lime_stop_rx_stream(handler);
   }
-
-  if (LMS_SetSampleRateDir(handler->device, LMS_CH_RX, rate, handler->dec_inter) != 0) {
+  
+  if(LMS_SetSampleRate(handler->device, rate, handler->dec_inter) != 0) {
+  //if (LMS_SetSampleRateDir(handler->device, LMS_CH_RX, rate, handler->dec_inter) != 0) {
     printf("Failed to set RX sampling rate\n");
     return SRSLTE_ERROR;
   }
@@ -685,8 +686,9 @@ double rf_lime_set_tx_srate(void* h, double rate)
   if (stream_active) {
     rf_lime_stop_tx_stream(handler);
   }
-
-  if (LMS_SetSampleRateDir(handler->device, LMS_CH_TX, rate, handler->dec_inter) != 0) {
+  
+  if(LMS_SetSampleRate(handler->device, rate, handler->dec_inter) != 0) {
+  //if (LMS_SetSampleRateDir(handler->device, LMS_CH_TX, rate, handler->dec_inter) != 0) {
     printf("Failed to set TX sampling rate\n");
     return SRSLTE_ERROR;
   }
