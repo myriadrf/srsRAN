@@ -431,7 +431,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     }
   }
 
-  for (uint16_t ch = 0; ch < handler->num_rx_channels; ch++) {
+  for (uint16_t ch = 0; ch < handler->num_tx_channels; ch++) {
     printf("Setup TX stream %d\n", (int)ch);
     handler->txStream[ch].channel             = ch;
     handler->txStream[ch].fifoSize            = 256 * 1024;
@@ -477,7 +477,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
 
     // TX antenna
     if (txant_ptr) {
-      copy_subdev_string(txant_str, txant_ptr + strlen(rxant_arg));
+      copy_subdev_string(txant_str, txant_ptr + strlen(txant_arg));
       // Find the required path
       for (int i = 0; i < num_tx_antennas; i++) {
         if (strstr(txant_str, tx_ant_list[i])) {
@@ -489,12 +489,12 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
 
     for (size_t i = 0; i < handler->num_tx_channels; i++)
       if (LMS_SetAntenna(sdr, LMS_CH_TX, i, ant_tx_path) != 0) {
-        printf("Failed to set tx antenna\n");
+        printf("Failed to set Tx antenna\n");
         return SRSLTE_ERROR;
       }
     for (size_t i = 0; i < handler->num_rx_channels; i++)
       if (LMS_SetAntenna(sdr, LMS_CH_RX, i, ant_rx_path) != 0) {
-        printf("Failed to set tx antenna\n");
+        printf("Failed to set Rx antenna\n");
         return SRSLTE_ERROR;
       }
   }
@@ -634,9 +634,8 @@ double rf_lime_set_rx_srate(void* h, double rate)
   if (stream_active) {
     rf_lime_stop_rx_stream(handler);
   }
-  
-  if(LMS_SetSampleRate(handler->device, rate, handler->dec_inter) != 0) {
-  //if (LMS_SetSampleRateDir(handler->device, LMS_CH_RX, rate, handler->dec_inter) != 0) {
+
+  if (LMS_SetSampleRateDir(handler->device, LMS_CH_RX, rate, handler->dec_inter) != 0) {
     printf("Failed to set RX sampling rate\n");
     return SRSLTE_ERROR;
   }
