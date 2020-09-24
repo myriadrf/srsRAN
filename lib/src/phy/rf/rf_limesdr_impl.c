@@ -701,9 +701,10 @@ double rf_lime_set_tx_srate(void* h, double rate)
   handler->tx_rate = srate;
 
   if (handler->calibrate & CALIBRATE_FILTER) {
+    double analog_bw = get_analog_filter_bw(rate);
+    printf("Setting analog TX LPF BW to: %.2f\n", analog_bw / 1e6);
     for (size_t i = 0; i < handler->num_tx_channels; i++) {
-      // Keep TX LPF open no matter the sampling rate
-      if (LMS_SetLPFBW(handler->device, LMS_CH_TX, i, 30e6) != 0) {
+      if (LMS_SetLPFBW(handler->device, LMS_CH_TX, i, analog_bw) != 0) {
         printf("Failed to disable analog TX LPF\n");
       }
     }
