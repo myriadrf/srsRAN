@@ -41,7 +41,7 @@
 #define ANALOG_LPF_COEFF 1
 
 typedef struct {
-  char*         devname;
+  const char*   devname;
   lms_device_t* device;
 
   lms_stream_t rxStream[SRSLTE_MAX_PORTS];
@@ -332,14 +332,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
   handler->rx_stream_active = false;
   handler->config_file      = false;
   handler->rx_first_shot    = true;
-
-  // Set up device name
-  if (strstr(list[lms_index], DEVNAME_MINI))
-    handler->devname = DEVNAME_MINI;
-  else if (strstr(list[lms_index], DEVNAME_USB))
-    handler->devname = DEVNAME_USB;
-  else
-    handler->devname = "limesdr"; // Generic name
+  handler->devname          = LMS_GetDeviceInfo(sdr)->deviceName;
 
   // Check whether config file is available
   char  config_arg[]   = "config=";
