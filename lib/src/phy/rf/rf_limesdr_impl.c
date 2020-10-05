@@ -37,6 +37,9 @@
 #define CALIBRATE_FILTER 2
 #define CALIBRATE_IQDC 1
 
+#define DIGITAL_GFIR_COEFF 0.95
+#define ANALOG_LPF_COEFF 1
+
 typedef struct {
   char*         devname;
   lms_device_t* device;
@@ -184,7 +187,12 @@ double get_channel_bw(double rate)
 
 double get_analog_filter_bw(double rate)
 {
-  return get_channel_bw(rate) * 1.2;
+  return get_channel_bw(rate) * ANALOG_LPF_COEFF; // 1.2;
+}
+
+double get_digital_filter_bw(double rate)
+{
+  return get_channel_bw(rate) * DIGITAL_GFIR_COEFF;
 }
 
 const char* rf_lime_devname(void* h)
@@ -655,7 +663,8 @@ double rf_lime_set_rx_srate(void* h, double rate)
 
   // Set up filters and calibration
   if (handler->calibrate & CALIBRATE_FILTER) {
-    double analog_bw = get_analog_filter_bw(rate);
+    double filter_bw = get_analog_filter_bw(rate);
+    double analog_bw = filter_bw > 1.5e6 ? filter_bw : 1.5e6;
     printf("Setting analog RX LPF BW to: %.2f\n", analog_bw / 1e6);
     for (size_t i = 0; i < handler->num_rx_channels; i++) {
       if (LMS_SetLPFBW(handler->device, LMS_CH_RX, i, analog_bw) != 0) {
@@ -665,7 +674,7 @@ double rf_lime_set_rx_srate(void* h, double rate)
   }
 
   if (handler->calibrate & CALIBRATE_GFIR) {
-    double digital_bw = get_channel_bw(rate);
+    double digital_bw = get_digital_filter_bw(rate);
     printf("Setting digital RX LPF BW to: %.2f\n", digital_bw / 1e6);
     for (size_t i = 0; i < handler->num_rx_channels; i++) {
       if (LMS_SetGFIRLPF(handler->device, LMS_CH_RX, i, true, digital_bw) != 0) {
@@ -702,7 +711,8 @@ double rf_lime_set_tx_srate(void* h, double rate)
   handler->tx_rate = srate;
 
   if (handler->calibrate & CALIBRATE_FILTER) {
-    double analog_bw = get_analog_filter_bw(rate);
+    double filter_bw = get_analog_filter_bw(rate);
+    double analog_bw = filter_bw > 5e6 ? filter_bw : 5e6;
     printf("Setting analog TX LPF BW to: %.2f\n", analog_bw / 1e6);
     for (size_t i = 0; i < handler->num_tx_channels; i++) {
       if (LMS_SetLPFBW(handler->device, LMS_CH_TX, i, analog_bw) != 0) {
@@ -712,7 +722,7 @@ double rf_lime_set_tx_srate(void* h, double rate)
   }
 
   if (handler->calibrate & CALIBRATE_GFIR) {
-    double digital_bw = get_channel_bw(rate);
+    double digital_bw = get_digital_filter_bw(rate);
     printf("Setting digital TX LPF BW to: %.2f\n", digital_bw / 1e6);
     for (size_t i = 0; i < handler->num_tx_channels; i++) {
       if (LMS_SetGFIRLPF(handler->device, LMS_CH_TX, i, true, digital_bw) != 0) {
