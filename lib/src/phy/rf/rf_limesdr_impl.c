@@ -948,10 +948,10 @@ int rf_lime_recv_with_time_multi(void*    h,
     }
 
     trials++;
-  } while (num_total_samples < nsamples && trials < 100);
+  } while (num_total_samples < nsamples && trials < 10);
 
   // TODO: handle this better
-  if (trials == 100)
+  if (trials == 10)
     printf("Too many RX trials\n");
 
   return num_total_samples;
@@ -1052,9 +1052,9 @@ int rf_lime_send_timed_multi(void*  h,
     }
 
     trials++;
-  } while (num_total_samples < nsamples && trials < 100);
+  } while (num_total_samples < nsamples && trials < 10);
 
-  if (trials == 100) {
+  if (trials == 10) {
     printf("Too many trials\n");
   }
   return num_total_samples;
