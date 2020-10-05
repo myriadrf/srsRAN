@@ -570,6 +570,20 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     remove_substring(args, tcxo_str);
   }
 
+  if (strcmp(handler->devname, DEVNAME_CC) == 0) {
+    LMS_WriteFPGAReg(handler->device, 0x18, 0x0); // TDD_Mode
+    LMS_WriteFPGAReg(handler->device, 0x18, 0x0); // TDD_mode
+    LMS_WriteFPGAReg(handler->device, 0x10, 0x1); // TDD_start_delay
+    LMS_WriteFPGAReg(handler->device, 0x11, 0x1); // TDD_stop_delay
+    LMS_WriteFPGAReg(handler->device, 0xCC, 0x0); // TDD_switch_mode
+    LMS_WriteFPGAReg(handler->device, 0xCD, 0x0); // TDD_switch_dir
+
+    uint16_t reg13 = 0;
+    LMS_ReadFPGAReg(handler->device, 0x13, &reg13);
+    reg13 &= ~((1 << 7) | (1 << 15) | (1 << 8) | (1 << 14)); // TX/RX enable mux
+    LMS_WriteFPGAReg(handler->device, 0x13, reg13);
+  }
+
   // Set up async_thread
 #if HAVE_ASYNC_THREAD
   handler->async_thread_running = true;
@@ -654,6 +668,12 @@ double rf_lime_set_rx_srate(void* h, double rate)
   printf("RX sampling rate: %.2f\n", srate / 1e6);
 
   // Set up filters and calibration
+  uint16_t reg13;
+  if (strcmp(handler->devname, DEVNAME_CC)) {
+    LMS_ReadFPGAReg(handler->device, 0x13, &reg13);
+    LMS_WriteFPGAReg(handler->device, 0x13, reg13 | 0x60);
+  }
+
   if (handler->calibrate & CALIBRATE_FILTER) {
     double filter_bw = get_analog_filter_bw(rate);
     double analog_bw = filter_bw > 1.5e6 ? filter_bw : 1.5e6;
@@ -673,6 +693,10 @@ double rf_lime_set_rx_srate(void* h, double rate)
         printf("LMS_SetGFIRLPF: Failed to set digital RX LPF\n");
       }
     }
+  }
+
+  if (strcmp(handler->devname, DEVNAME_CC)) {
+    LMS_WriteFPGAReg(handler->device, 0x13, reg13);
   }
 
   if (stream_active) {
@@ -706,6 +730,13 @@ double rf_lime_set_tx_srate(void* h, double rate)
   printf("TX sampling rate: %.2f\n", srate / 1e6);
   handler->tx_rate = srate;
 
+  // Set up filters and calibration
+  uint16_t reg13;
+  if (strcmp(handler->devname, DEVNAME_CC)) {
+    LMS_ReadFPGAReg(handler->device, 0x13, &reg13);
+    LMS_WriteFPGAReg(handler->device, 0x13, reg13 | 0x60);
+  }
+
   if (handler->calibrate & CALIBRATE_FILTER) {
     double filter_bw = get_analog_filter_bw(rate);
     double analog_bw = filter_bw > 5e6 ? filter_bw : 5e6;
@@ -726,6 +757,11 @@ double rf_lime_set_tx_srate(void* h, double rate)
       }
     }
   }
+
+  if (strcmp(handler->devname, DEVNAME_CC)) {
+    LMS_WriteFPGAReg(handler->device, 0x13, reg13);
+  }
+
   if (stream_active) {
     rf_lime_start_tx_stream(handler);
   }
