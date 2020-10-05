@@ -142,7 +142,7 @@ static void* async_thread(void* h)
   lms_stream_status_t tx_status;
   while (handler->async_thread_running) {
     if (LMS_GetStreamStatus(&handler->txStream[0], &tx_status) != 0) {
-      printf("Error while receiving async information\n");
+      printf("LMS_GetStreamStatus: Error while receiving async information\n");
       handler->async_thread_running = false;
       return NULL;
     }
@@ -205,11 +205,12 @@ int rf_lime_start_rx_stream(void* h, bool now)
 {
   rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
   if (handler->rx_stream_active == false) {
-    for (size_t i = 0; i < handler->num_rx_channels; i++)
+    for (size_t i = 0; i < handler->num_rx_channels; i++) {
       if (LMS_StartStream(&(handler->rxStream[i])) != 0) {
-        printf("Error starting RX stream\n");
+        printf("LMS_StartStream: Error starting RX stream\n");
         return SRSLTE_ERROR;
       }
+    }
     handler->rx_stream_active = true;
   }
   return SRSLTE_SUCCESS;
@@ -219,11 +220,13 @@ int rf_lime_start_tx_stream(void* h)
 {
   rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
   if (handler->tx_stream_active == false) {
-    for (size_t i = 0; i < handler->num_tx_channels; i++)
+
+    for (size_t i = 0; i < handler->num_tx_channels; i++) {
       if (LMS_StartStream(&(handler->txStream[i])) != 0) {
-        printf("Error starting TX stream\n");
+        printf("LMS_StartStream: Error starting TX stream\n");
         return SRSLTE_ERROR;
       }
+    }
     handler->tx_stream_active = true;
   }
   return SRSLTE_SUCCESS;
@@ -235,7 +238,7 @@ int rf_lime_stop_rx_stream(void* h)
   if (handler->rx_stream_active == true) {
     for (size_t i = 0; i < handler->num_rx_channels; i++)
       if (LMS_StopStream(&handler->rxStream[i]) != 0) {
-        printf("Error stopping RX stream\n");
+        printf("LMS_StopStream: Error stopping RX stream\n");
         return SRSLTE_ERROR;
       }
     handler->rx_stream_active = false;
@@ -249,7 +252,7 @@ int rf_lime_stop_tx_stream(void* h)
   if (handler->tx_stream_active == true) {
     for (size_t i = 0; i < handler->num_tx_channels; i++)
       if (LMS_StopStream(&handler->txStream[i]) != 0) {
-        printf("Error stopping TX stream\n");
+        printf("LMS_StopStream: Error stopping TX stream\n");
         return SRSLTE_ERROR;
       }
     handler->tx_stream_active = false;
@@ -294,7 +297,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     printf("%s\n", list[i]);
   }
 
-  if(args == NULL){
+  if (args == NULL) {
     args = "";
   }
   // Open device
@@ -319,7 +322,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
   }
 
   if (LMS_Open(&sdr, list[lms_index], NULL) != 0) {
-    printf("Error opening LimeSDR device\n");
+    printf("LMS_Open: Error opening LimeSDR device\n");
     return SRSLTE_ERROR;
   }
 
@@ -343,7 +346,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     printf("Loading config file %s\n", config_str);
     handler->config_file = true;
     if (LMS_LoadConfig(handler->device, config_str) != 0) {
-      printf("Failed to load config file, continuing with normal configuration\n");
+      printf("LMS_LoadConfig: Failed to load config file, continuing with normal configuration\n");
       handler->config_file = false;
     }
     remove_substring(args, config_arg);
@@ -354,7 +357,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
   if (!handler->config_file) {
     printf("Initializing limesdr device\n");
     if (LMS_Init(sdr) != 0) {
-      printf("Failed to ini LimeSDR device\n");
+      printf("LMS_Init: Failed to initialize LimeSDR device\n");
       return SRSLTE_ERROR;
     }
   }
@@ -368,7 +371,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     double freq = atof(refclk_str);
     printf("Setting reference clock to %.2f MHz\n", freq / 1e6);
     if (LMS_SetClockFreq(sdr, LMS_CLOCK_EXTREF, freq) != 0) {
-      printf("failed to set external clock\n");
+      printf("LMS_SetClockFreq: failed to set external clock frequency\n");
       return SRSLTE_ERROR;
     }
     remove_substring(args, refclk_arg);
@@ -391,14 +394,14 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
   if (num_available_channels > 0 && num_requested_channels > 0 && !handler->config_file) {
     for (size_t ch = 0; ch < handler->num_rx_channels; ch++) {
       if (LMS_EnableChannel(handler->device, LMS_CH_RX, ch, true) != 0) {
-        printf("Failed to enable LimeSDR RX channel %d\n", (int)ch);
+        printf("LMS_EnableChannel: Failed to enable RX channel %d\n", (int)ch);
         return SRSLTE_ERROR;
       }
     }
 
     for (size_t ch = 0; ch < handler->num_tx_channels; ch++) {
       if (LMS_EnableChannel(handler->device, LMS_CH_TX, ch, true) != 0) {
-        printf("Failed to enable LimeSDR TX channel %d\n", (int)ch);
+        printf("LMS_EnableChannel: Failed to enable TX channel %d\n", (int)ch);
         return SRSLTE_ERROR;
       }
     }
@@ -407,7 +410,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
   // Stream format setup
   handler->use_12bit_format = false;
   if (strstr(args, "format=i12")) {
-    printf("Using 12 bit format");
+    printf("Using 12 bit format\n");
     handler->use_12bit_format = true;
     remove_substring(args, "format=i12");
   } else if (strstr(args, "format=f32")) {
@@ -425,9 +428,9 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     handler->rxStream[ch].fifoSize            = 256 * 1024;
     handler->rxStream[ch].throughputVsLatency = 0.3;
     handler->rxStream[ch].dataFmt             = handler->use_12bit_format ? LMS_FMT_I12 : LMS_FMT_F32;
-    handler->rxStream[ch].isTx = false;
+    handler->rxStream[ch].isTx                = false;
     if (LMS_SetupStream(handler->device, &(handler->rxStream[ch])) != 0) {
-      printf("Failed to set up RX stream\n");
+      printf("LMS_SetupStream: Failed to set up RX stream\n");
       return SRSLTE_ERROR;
     }
   }
@@ -440,7 +443,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     handler->txStream[ch].dataFmt             = handler->use_12bit_format ? LMS_FMT_I12 : LMS_FMT_F32;
     handler->txStream[ch].isTx                = true;
     if (LMS_SetupStream(handler->device, &(handler->txStream[ch])) != 0) {
-      printf("Failed to set up TX stream\n");
+      printf("LMS_SetupStream: Failed to set up TX stream\n");
       return SRSLTE_ERROR;
     }
   }
@@ -490,12 +493,12 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
 
     for (size_t i = 0; i < handler->num_tx_channels; i++)
       if (LMS_SetAntenna(sdr, LMS_CH_TX, i, ant_tx_path) != 0) {
-        printf("Failed to set Tx antenna\n");
+        printf("LMS_SetAntenna: Failed to set TX antenna\n");
         return SRSLTE_ERROR;
       }
     for (size_t i = 0; i < handler->num_rx_channels; i++)
       if (LMS_SetAntenna(sdr, LMS_CH_RX, i, ant_rx_path) != 0) {
-        printf("Failed to set Rx antenna\n");
+        printf("LMS_SetAntenna: Failed to set RX antenna\n");
         return SRSLTE_ERROR;
       }
   }
@@ -561,7 +564,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     int tcxo_val = atoi(tcxo_str);
     printf("Setting TCXO value to %d\n", tcxo_val);
     if (LMS_WriteCustomBoardParam(handler->device, 0, tcxo_val, "") != 0) {
-      printf("Failed to set TCXO value\n");
+      printf("LMS_WriteCustomBoardParam: Failed to set TCXO value\n");
     }
     remove_substring(args, tcxo_str);
     remove_substring(args, tcxo_str);
@@ -637,13 +640,13 @@ double rf_lime_set_rx_srate(void* h, double rate)
   }
 
   if (LMS_SetSampleRateDir(handler->device, LMS_CH_RX, rate, handler->dec_inter) != 0) {
-    printf("Failed to set RX sampling rate\n");
+    printf("LMS_SetSampleRate: Failed to set RX sampling rate\n");
     return SRSLTE_ERROR;
   }
 
   double srate;
   if (LMS_GetSampleRate(handler->device, false, 0, &srate, NULL) != 0) {
-    printf("Failed to get RX sampling rate\n");
+    printf("LMS_GetSampleRate: Failed to get RX sampling rate\n");
     return SRSLTE_ERROR;
   }
 
@@ -661,7 +664,7 @@ double rf_lime_set_rx_srate(void* h, double rate)
     printf("Setting analog RX LPF BW to: %.2f\n", analog_bw / 1e6);
     for (size_t i = 0; i < handler->num_rx_channels; i++) {
       if (LMS_SetLPFBW(handler->device, LMS_CH_RX, i, analog_bw) != 0) {
-        printf("Failed to set analog RX LPF\n");
+        printf("LMS_SetLPFBW: Failed to set analog RX LPF\n");
       }
     }
   }
@@ -671,7 +674,7 @@ double rf_lime_set_rx_srate(void* h, double rate)
     printf("Setting digital RX LPF BW to: %.2f\n", digital_bw / 1e6);
     for (size_t i = 0; i < handler->num_rx_channels; i++) {
       if (LMS_SetGFIRLPF(handler->device, LMS_CH_RX, i, true, digital_bw) != 0) {
-        printf("Failed to set digital RX LPF\n");
+        printf("LMS_SetGFIRLPF: Failed to set digital RX LPF\n");
       }
     }
   }
@@ -690,13 +693,13 @@ double rf_lime_set_tx_srate(void* h, double rate)
   
   if(LMS_SetSampleRate(handler->device, rate, handler->dec_inter) != 0) {
   //if (LMS_SetSampleRateDir(handler->device, LMS_CH_TX, rate, handler->dec_inter) != 0) {
-    printf("Failed to set TX sampling rate\n");
+    printf("LMS_SetSampleRate: Failed to set TX sampling rate\n");
     return SRSLTE_ERROR;
   }
 
   double srate;
   if (LMS_GetSampleRate(handler->device, true, 0, &srate, NULL) != 0) {
-    printf("Failed to get TX sampling rate\n");
+    printf("LMS_GetSampleRate: Failed to get TX sampling rate\n");
     return SRSLTE_ERROR;
   }
 
@@ -709,7 +712,7 @@ double rf_lime_set_tx_srate(void* h, double rate)
     printf("Setting analog TX LPF BW to: %.2f\n", analog_bw / 1e6);
     for (size_t i = 0; i < handler->num_tx_channels; i++) {
       if (LMS_SetLPFBW(handler->device, LMS_CH_TX, i, analog_bw) != 0) {
-        printf("Failed to disable analog TX LPF\n");
+        printf("LMS_SetLPFBW: Failed to disable analog TX LPF\n");
       }
     }
   }
@@ -719,7 +722,7 @@ double rf_lime_set_tx_srate(void* h, double rate)
     printf("Setting digital TX LPF BW to: %.2f\n", digital_bw / 1e6);
     for (size_t i = 0; i < handler->num_tx_channels; i++) {
       if (LMS_SetGFIRLPF(handler->device, LMS_CH_TX, i, true, digital_bw) != 0) {
-        printf("Failed to set digital TX(%lu) LPF\n", i);
+        printf("LMS_SetGFIRLPF: Failed to set digital TX(%lu) LPF\n", i);
       }
     }
   }
@@ -735,7 +738,7 @@ double rf_lime_set_rx_gain(void* h, double gain)
   if (!handler->config_file) {
     for (size_t i = 0; i < handler->num_rx_channels; i++)
       if (LMS_SetGaindB(handler->device, false, 0, (unsigned)gain) != 0) {
-        printf("Failed to set rx gain\n");
+        printf("LMS_SetGaindB: Failed to set RX gain\n");
         return SRSLTE_ERROR;
       }
   } else {
@@ -744,7 +747,7 @@ double rf_lime_set_rx_gain(void* h, double gain)
 
   unsigned actual_gain = 0;
   if (LMS_GetGaindB(handler->device, false, 0, &actual_gain) != 0) {
-    printf("Failed get rx gain\n");
+    printf("LMS_GetGaindB: Failed get RX gain\n");
     return SRSLTE_ERROR;
   }
   printf("Actual RX gain: %u dB\n", actual_gain);
@@ -757,7 +760,7 @@ double rf_lime_set_tx_gain(void* h, double gain)
   if (!handler->config_file) {
     for (size_t i = 0; i < handler->num_tx_channels; i++)
       if (LMS_SetGaindB(handler->device, true, i, (unsigned)gain) != 0) {
-        printf("Failed to set tx gain\n");
+        printf("LMS_SetGaindB: Failed to set TX gain\n");
         return SRSLTE_ERROR;
       }
   } else {
@@ -766,7 +769,7 @@ double rf_lime_set_tx_gain(void* h, double gain)
 
   unsigned actual_gain = 0;
   if (LMS_GetGaindB(handler->device, true, 0, &actual_gain) != 0) {
-    printf("Failed get tx gain\n");
+    printf("LMS_GetGaindB: Failed get TX gain\n");
     return SRSLTE_ERROR;
   }
   printf("Actual TX gain: %u dB\n", actual_gain);
@@ -778,7 +781,7 @@ double rf_lime_get_rx_gain(void* h)
   rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
   unsigned           gain    = 0;
   if (LMS_GetGaindB(handler->device, false, 0, &gain) != 0) {
-    printf("Failed get gain\n");
+    printf("LMS_GetGaindB: Failed get gain\n");
     return SRSLTE_ERROR;
   }
   return (double)gain;
@@ -789,7 +792,7 @@ double rf_lime_get_tx_gain(void* h)
   rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
   unsigned           gain    = 0;
   if (LMS_GetGaindB(handler->device, true, 0, &gain) != 0) {
-    printf("Failed get gain\n");
+    printf("LMS_GetGaindB: Failed get gain\n");
     return SRSLTE_ERROR;
   }
   return (double)gain;
@@ -809,7 +812,7 @@ double rf_lime_set_rx_freq(void* h, uint32_t ch, double freq)
 {
   rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
   if (LMS_SetLOFrequency(handler->device, LMS_CH_RX, ch, freq) != 0) {
-    printf("Failed to set RX LO frequency\n");
+    printf("LMS_SetLOFrequency: Failed to set RX LO frequency\n");
     return SRSLTE_ERROR;
   }
 
@@ -817,13 +820,13 @@ double rf_lime_set_rx_freq(void* h, uint32_t ch, double freq)
     double bandwidth = get_channel_bw(handler->rx_rate);
     printf("Calibrating RX channel: %u, BW: %.2f\n", ch, bandwidth / 1e6);
     if (LMS_Calibrate(handler->device, LMS_CH_RX, ch, bandwidth, 0) != 0) {
-      printf("Failed to calibrate RX channel :%u\n", ch);
+      printf("LMS_Calibrate: Failed to calibrate RX channel :%u\n", ch);
     }
   }
 
   double actual_freq = 0.0;
   if (LMS_GetLOFrequency(handler->device, LMS_CH_RX, ch, &actual_freq) != 0) {
-    printf("Failed to get LO frequency\n");
+    printf("LMS_GetLOFrequency: Failed to get LO frequency\n");
     return SRSLTE_ERROR;
   }
 
@@ -834,7 +837,7 @@ double rf_lime_set_tx_freq(void* h, uint32_t ch, double freq)
 {
   rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
   if (LMS_SetLOFrequency(handler->device, LMS_CH_TX, ch, freq) != 0) {
-    printf("Failed to set RX LO frequency\n");
+    printf("LMS_SetLOFrequency: Failed to set RX LO frequency\n");
     return SRSLTE_ERROR;
   }
 
@@ -842,13 +845,13 @@ double rf_lime_set_tx_freq(void* h, uint32_t ch, double freq)
     double bandwidth = get_channel_bw(handler->tx_rate);
     printf("Calibrating TX channel: %u, BW: %.2f\n", ch, bandwidth / 1e6);
     if (LMS_Calibrate(handler->device, LMS_CH_TX, ch, bandwidth, 0) != 0) {
-      printf("Failed to calibrate TX channel :%u\n", ch);
+      printf("LMS_Calibrate: Failed to calibrate TX channel :%u\n", ch);
     }
   }
 
   double actual_freq = 0.0;
   if (LMS_GetLOFrequency(handler->device, LMS_CH_TX, ch, &actual_freq) != 0) {
-    printf("Failed to get LO frequency\n");
+    printf("LMS_GetLOFrequency: Failed to get LO frequency\n");
     return SRSLTE_ERROR;
   }
 
@@ -911,7 +914,7 @@ int rf_lime_recv_with_time_multi(void*    h,
     for (size_t i = 0; i < handler->num_rx_channels; i++) {
       ret[i] = LMS_RecvStream(&handler->rxStream[i], buffs_ptr[i], num_samples_left, &meta, 100);
       if (i > 0 && ret[0] != ret[i]) {
-        printf("LMS_RecvStream misaligned channel data\n");
+        printf("LMS_RecvStream: misaligned channel data\n");
         return SRSLTE_ERROR;
       }
     }
@@ -1026,7 +1029,7 @@ int rf_lime_send_timed_multi(void*  h,
     for (size_t ch = 0; ch < handler->num_tx_channels; ch++) {
       ret[ch] = LMS_SendStream(&handler->txStream[ch], buffs_ptr[ch], num_samples_left, &meta, 100);
       if (ch > 0 && ret[0] != ret[ch]) {
-        printf("LMS_SendStream misaligned channel data\n");
+        printf("LMS_SendStream: misaligned channel data\n");
         return SRSLTE_ERROR;
       }
     }
