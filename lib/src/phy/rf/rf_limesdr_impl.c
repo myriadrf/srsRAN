@@ -862,11 +862,9 @@ double rf_lime_set_rx_freq(void* h, uint32_t ch, double freq)
     double bandwidth = get_channel_bw(handler->rx_rate);
     double cal_bw    = bandwidth > 2.5e6 ? bandwidth : 2.5e6;
 
-    for (size_t i = 0; i < handler->num_rx_channels; i++) {
-      printf("Calibrating RX channel(start): %lu, BW: %.2f\n", i, cal_bw / 1e6);
-      if (LMS_Calibrate(handler->device, LMS_CH_RX, i, cal_bw, 0) != 0) {
-        printf("LMS_Calibrate: Failed to calibrate RX channel :%lu\n", i);
-      }
+    printf("Calibrating RX channel: %u, BW: %.2f\n", ch, cal_bw / 1e6);
+    if (LMS_Calibrate(handler->device, LMS_CH_RX, ch, cal_bw, 0) != 0) {
+      printf("LMS_Calibrate: Failed to calibrate RX channel :%u\n", ch);
     }
   }
 
@@ -890,11 +888,9 @@ double rf_lime_set_tx_freq(void* h, uint32_t ch, double freq)
   if (handler->calibrate & CALIBRATE_IQDC) {
     double bandwidth = get_channel_bw(handler->tx_rate);
     double cal_bw    = bandwidth > 2.5e6 ? bandwidth : 2.5e6;
-    for (size_t i = 0; i < handler->num_tx_channels; i++) {
-      printf("Calibrating TX channel: %lu, BW: %.2f\n", i, cal_bw / 1e6);
-      if (LMS_Calibrate(handler->device, LMS_CH_TX, i, cal_bw, 0) != 0) {
-        printf("LMS_Calibrate: Failed to calibrate TX channel :%lu\n", i);
-      }
+    printf("Calibrating TX channel: %u, BW: %.2f\n", ch, cal_bw / 1e6);
+    if (LMS_Calibrate(handler->device, LMS_CH_TX, ch, cal_bw, 0) != 0) {
+      printf("LMS_Calibrate: Failed to calibrate TX channel :%u\n", ch);
     }
   }
 
