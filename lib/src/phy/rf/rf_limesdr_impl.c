@@ -53,6 +53,8 @@ typedef struct {
 
   bool             config_file;
   int              calibrate;
+  bool             need_tx_cal;
+  bool             need_rx_cal;
   double           tx_rate;
   double           rx_rate;
   size_t           dec_inter;
@@ -197,25 +199,28 @@ const char* rf_lime_devname(void* h)
   return handler->devname;
 }
 
-int rf_lime_start_rx_stream(void* h, bool now)
-{
-  rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
-  if (handler->rx_stream_active == false) {
-    for (size_t i = 0; i < handler->num_rx_channels; i++) {
-      if (LMS_StartStream(&(handler->rxStream[i])) != 0) {
-        printf("LMS_StartStream: Error starting RX stream\n");
-        return SRSLTE_ERROR;
-      }
-    }
-    handler->rx_stream_active = true;
-  }
-  return SRSLTE_SUCCESS;
-}
-
 int rf_lime_start_tx_stream(void* h)
 {
   rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
   if (handler->tx_stream_active == false) {
+    if (handler->calibrate & CALIBRATE_IQDC && handler->need_tx_cal) {
+      bool streamActive = handler->rx_stream_active;
+      if(streamActive) {
+        rf_lime_stop_rx_stream(h);
+      }
+      double bandwidth = get_channel_bw(handler->tx_rate);
+      double cal_bw    = bandwidth > 2.5e6 ? bandwidth : 2.5e6;
+      for(size_t ch = 0; ch < handler->num_tx_channels; ch++) {
+        printf("Calibrating TX channel: %lu, BW: %.2f\n", ch, cal_bw / 1e6);
+        if (LMS_Calibrate(handler->device, LMS_CH_TX, ch, cal_bw, 0) != 0) {
+          printf("LMS_Calibrate: Failed to calibrate TX channel :%lu\n", ch);
+        }
+      }
+      if(streamActive) {
+        rf_lime_start_rx_stream(h,true);
+      }
+      handler->need_tx_cal = false;
+    }
 
     for (size_t i = 0; i < handler->num_tx_channels; i++) {
       if (LMS_StartStream(&(handler->txStream[i])) != 0) {
@@ -224,20 +229,6 @@ int rf_lime_start_tx_stream(void* h)
       }
     }
     handler->tx_stream_active = true;
-  }
-  return SRSLTE_SUCCESS;
-}
-
-int rf_lime_stop_rx_stream(void* h)
-{
-  rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
-  if (handler->rx_stream_active == true) {
-    for (size_t i = 0; i < handler->num_rx_channels; i++)
-      if (LMS_StopStream(&handler->rxStream[i]) != 0) {
-        printf("LMS_StopStream: Error stopping RX stream\n");
-        return SRSLTE_ERROR;
-      }
-    handler->rx_stream_active = false;
   }
   return SRSLTE_SUCCESS;
 }
@@ -252,6 +243,54 @@ int rf_lime_stop_tx_stream(void* h)
         return SRSLTE_ERROR;
       }
     handler->tx_stream_active = false;
+  }
+  return SRSLTE_SUCCESS;
+}
+
+int rf_lime_start_rx_stream(void* h, bool now)
+{
+  rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
+  if (handler->rx_stream_active == false) {
+    if (handler->calibrate & CALIBRATE_IQDC && handler->need_rx_cal) {
+      bool streamActive = handler->tx_stream_active;
+      if(streamActive) {
+        rf_lime_stop_tx_stream(h);
+      }
+      double bandwidth = get_channel_bw(handler->rx_rate);
+      double cal_bw    = bandwidth > 2.5e6 ? bandwidth : 2.5e6;
+      for(size_t ch = 0; ch < handler->num_rx_channels; ch++) {
+        printf("Calibrating RX channel: %lu, BW: %.2f\n", ch, cal_bw / 1e6);
+        if (LMS_Calibrate(handler->device, LMS_CH_RX, ch, cal_bw, 0) != 0) {
+          printf("LMS_Calibrate: Failed to calibrate RX channel :%lu\n", ch);
+        }
+      }
+      if(streamActive) {
+        rf_lime_start_tx_stream(h);
+      }
+      handler->need_rx_cal = false;
+    }
+
+    for (size_t i = 0; i < handler->num_rx_channels; i++) {
+      if (LMS_StartStream(&(handler->rxStream[i])) != 0) {
+        printf("LMS_StartStream: Error starting RX stream\n");
+        return SRSLTE_ERROR;
+      }
+    }
+    handler->rx_stream_active = true;
+  }
+  return SRSLTE_SUCCESS;
+}
+
+int rf_lime_stop_rx_stream(void* h)
+{
+  rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
+  if (handler->rx_stream_active == true) {
+    for (size_t i = 0; i < handler->num_rx_channels; i++)
+      if (LMS_StopStream(&handler->rxStream[i]) != 0) {
+        printf("LMS_StopStream: Error stopping RX stream\n");
+        return SRSLTE_ERROR;
+      }
+    handler->rx_stream_active = false;
   }
   return SRSLTE_SUCCESS;
 }
@@ -329,8 +368,9 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
   handler->device           = sdr;
   handler->tx_stream_active = false;
   handler->rx_stream_active = false;
-  handler->config_file      = false;
-  
+  handler->config_file      = false;  
+  handler->need_rx_cal      = true;
+  handler->need_tx_cal      = true;
   handler->devname          = LMS_GetDeviceInfo(sdr)->deviceName;
 
   // Check whether config file is available
@@ -864,16 +904,6 @@ double rf_lime_set_rx_freq(void* h, uint32_t ch, double freq)
     return SRSLTE_ERROR;
   }
 
-  if (handler->calibrate & CALIBRATE_IQDC) {
-    double bandwidth = get_channel_bw(handler->rx_rate);
-    double cal_bw    = bandwidth > 2.5e6 ? bandwidth : 2.5e6;
-
-    printf("Calibrating RX channel: %u, BW: %.2f\n", ch, cal_bw / 1e6);
-    if (LMS_Calibrate(handler->device, LMS_CH_RX, ch, cal_bw, 0) != 0) {
-      printf("LMS_Calibrate: Failed to calibrate RX channel :%u\n", ch);
-    }
-  }
-
   return actual_freq;
 }
 
@@ -889,15 +919,6 @@ double rf_lime_set_tx_freq(void* h, uint32_t ch, double freq)
   if (LMS_GetLOFrequency(handler->device, LMS_CH_TX, ch, &actual_freq) != 0) {
     printf("LMS_GetLOFrequency: Failed to get LO frequency\n");
     return SRSLTE_ERROR;
-  }
-
-  if (handler->calibrate & CALIBRATE_IQDC) {
-    double bandwidth = get_channel_bw(handler->tx_rate);
-    double cal_bw    = bandwidth > 2.5e6 ? bandwidth : 2.5e6;
-    printf("Calibrating TX channel: %u, BW: %.2f\n", ch, cal_bw / 1e6);
-    if (LMS_Calibrate(handler->device, LMS_CH_TX, ch, cal_bw, 0) != 0) {
-      printf("LMS_Calibrate: Failed to calibrate TX channel :%u\n", ch);
-    }
   }
 
   return actual_freq;
