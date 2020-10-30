@@ -50,10 +50,6 @@ typedef struct {
   size_t       num_tx_channels;
   bool         tx_stream_active;
   bool         rx_stream_active;
-  bool         rx_first_shot;
-  bool         use_12bit_format;
-  int16_t*     rx_buffer[SRSLTE_MAX_PORTS]; // used only when format=I12
-  int16_t*     tx_buffer[SRSLTE_MAX_PORTS]; // used only when format=I12
 
   bool             config_file;
   int              calibrate;
@@ -334,7 +330,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
   handler->tx_stream_active = false;
   handler->rx_stream_active = false;
   handler->config_file      = false;
-  handler->rx_first_shot    = true;
+  
   handler->devname          = LMS_GetDeviceInfo(sdr)->deviceName;
 
   // Check whether config file is available
@@ -408,16 +404,17 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
   }
 
   // Stream format setup
-  handler->use_12bit_format = false;
+  unsigned linkFormat = 0;
   if (strstr(args, "format=i12")) {
-    printf("Using 12 bit format\n");
-    handler->use_12bit_format = true;
+    printf("Using 12 bit link format\n");
+    linkFormat = 2;
     remove_substring(args, "format=i12");
-  } else if (strstr(args, "format=f32")) {
-    printf("Using f32 format\n");
-    remove_substring(args, "format=f32");
+  } else if (strstr(args, "format=i16")) {
+    printf("Using 16 bit link format\n");
+    linkFormat = 1;
+    remove_substring(args, "format=i16");
   } else if (strstr(args, "format=")) {
-    printf("Wrong stream format, continuing with f32\n");
+    printf("Wrong link format, continuing with default\n");
     remove_substring(args, "format=");
   }
 
@@ -427,7 +424,8 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     handler->rxStream[ch].channel             = ch;
     handler->rxStream[ch].fifoSize            = 256 * 1024;
     handler->rxStream[ch].throughputVsLatency = 0.3;
-    handler->rxStream[ch].dataFmt             = handler->use_12bit_format ? LMS_FMT_I12 : LMS_FMT_F32;
+    handler->rxStream[ch].dataFmt             = LMS_FMT_F32;
+    handler->rxStream[ch].linkFmt             = linkFormat;
     handler->rxStream[ch].isTx                = false;
     if (LMS_SetupStream(handler->device, &(handler->rxStream[ch])) != 0) {
       printf("LMS_SetupStream: Failed to set up RX stream\n");
@@ -440,7 +438,8 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     handler->txStream[ch].channel             = ch;
     handler->txStream[ch].fifoSize            = 256 * 1024;
     handler->txStream[ch].throughputVsLatency = 0.3;
-    handler->txStream[ch].dataFmt             = handler->use_12bit_format ? LMS_FMT_I12 : LMS_FMT_F32;
+    handler->txStream[ch].dataFmt             = LMS_FMT_F32;
+    handler->txStream[ch].linkFmt             = linkFormat;
     handler->txStream[ch].isTx                = true;
     if (LMS_SetupStream(handler->device, &(handler->txStream[ch])) != 0) {
       printf("LMS_SetupStream: Failed to set up TX stream\n");
@@ -632,15 +631,8 @@ int rf_lime_close(void* h)
 #endif // DISABLE_CH_AFTER_CLOSE
 
   LMS_Close(handler->device);
-
-  for (size_t i = 0; i < handler->num_rx_channels; i++)
-    if (handler->rx_buffer[i])
-      free(handler->rx_buffer[i]);
-  for (size_t i = 0; i < handler->num_tx_channels; i++)
-    if (handler->tx_buffer[i])
-      free(handler->tx_buffer[i]);
-
   free(handler);
+
   return SRSLTE_SUCCESS;
 }
 
@@ -944,22 +936,10 @@ int rf_lime_recv_with_time_multi(void*    h,
   int                ret[SRSLTE_MAX_PORTS]       = {0};
   void*              buffs_ptr[SRSLTE_MAX_PORTS] = {0};
 
-  if (handler->rx_first_shot) {
-    handler->rx_first_shot = false;
-    if (handler->use_12bit_format)
-      for (size_t ch = 0; ch < handler->num_rx_channels; ch++)
-        handler->rx_buffer[ch] =
-            (int16_t*)malloc(32768 * 2 * sizeof(int16_t)); // allocate memory for 32768 samples (arbitraly chosen)
-  }
-
   do {
     for (size_t ch = 0; ch < handler->num_rx_channels; ch++) {
-      if (handler->use_12bit_format) {
-        buffs_ptr[ch] = &handler->rx_buffer[ch][num_total_samples];
-      } else {
         cf_t* data_c  = (cf_t*)data[ch];
         buffs_ptr[ch] = &data_c[num_total_samples];
-      }
     }
 
     uint32_t num_samples_left = nsamples - num_total_samples;
@@ -979,15 +959,6 @@ int rf_lime_recv_with_time_multi(void*    h,
     } else {
       if (secs != NULL && frac_secs != NULL && num_total_samples == 0) {
         timestamp_to_secs(handler->rx_rate, meta.timestamp, secs, frac_secs);
-      }
-
-      // convert I12 to floats
-      if (handler->use_12bit_format) {
-        for (size_t ch = 0; ch < handler->num_rx_channels; ch++) {
-          for (size_t i = 0; i < ret[0] * 2; i++) {
-            ((float*)data[ch])[i] = ((int16_t*)buffs_ptr[ch])[i] / 2048.0f;
-          }
-        }
       }
 
       num_total_samples += ret[0];
@@ -1045,9 +1016,6 @@ int rf_lime_send_timed_multi(void*  h,
   meta.timestamp          = 0;
 
   if (!handler->tx_stream_active) {
-    if (handler->use_12bit_format)
-      for (size_t ch = 0; ch < handler->num_tx_channels; ch++)
-        handler->tx_buffer[ch] = (int16_t*)malloc(32768 * 2 * sizeof(int16_t)); // allocate memory for 32768 samples
     rf_lime_start_tx_stream(handler);
   }
 
@@ -1061,15 +1029,7 @@ int rf_lime_send_timed_multi(void*  h,
 
   void* buffs_ptr[SRSLTE_MAX_CHANNELS] = {};
   for (size_t ch = 0; ch < handler->num_tx_channels; ch++) {
-    // Convert data to I12 if needed
-    if (handler->use_12bit_format) {
-      for (int i = 0; i < nsamples * 2; i++) {
-        handler->tx_buffer[ch][i] = ((float*)data[ch])[i] * 2048.0f;
-      }
-      buffs_ptr[ch] = handler->tx_buffer[ch];
-    } else {
       buffs_ptr[ch] = data[ch];
-    }
   }
 
   do {
