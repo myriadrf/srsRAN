@@ -768,7 +768,7 @@ double rf_lime_set_tx_srate(void* h, double rate)
   return srate;
 }
 
-double rf_lime_set_rx_gain(void* h, double gain)
+int rf_lime_set_rx_gain(void* h, double gain)
 {
   rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
   if (!handler->config_file) {
@@ -780,17 +780,24 @@ double rf_lime_set_rx_gain(void* h, double gain)
   } else {
     printf("Setting RX gain skipped\n");
   }
-
-  unsigned actual_gain = 0;
-  if (LMS_GetGaindB(handler->device, false, 0, &actual_gain) != 0) {
-    printf("LMS_GetGaindB: Failed get RX gain\n");
-    return SRSLTE_ERROR;
-  }
-  printf("Actual RX gain: %u dB\n", actual_gain);
-  return (double)actual_gain;
+  return SRSLTE_SUCCESS;
 }
 
-double rf_lime_set_tx_gain(void* h, double gain)
+int rf_lime_set_rx_gain_ch(void* h, uint32_t ch, double gain)
+{
+  rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
+  if (!handler->config_file) {
+    if (LMS_SetGaindB(handler->device, false, ch, (unsigned)gain) != 0) {
+      printf("LMS_SetGaindB: Failed to set RX gain\n");
+      return SRSLTE_ERROR;
+    }
+  } else {
+    printf("Setting RX gain skipped\n");
+  }
+  return SRSLTE_SUCCESS;
+}
+
+int rf_lime_set_tx_gain(void* h, double gain)
 {
   rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
   if (!handler->config_file) {
@@ -802,14 +809,21 @@ double rf_lime_set_tx_gain(void* h, double gain)
   } else {
     printf("Setting TX gain skipped\n");
   }
+  return SRSLTE_SUCCESS;
+}
 
-  unsigned actual_gain = 0;
-  if (LMS_GetGaindB(handler->device, true, 0, &actual_gain) != 0) {
-    printf("LMS_GetGaindB: Failed get TX gain\n");
-    return SRSLTE_ERROR;
+int rf_lime_set_tx_gain_ch(void* h, uint32_t ch, double gain)
+{
+  rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
+  if (!handler->config_file) {
+    if (LMS_SetGaindB(handler->device, true, ch, (unsigned)gain) != 0) {
+      printf("LMS_SetGaindB: Failed to set RX gain\n");
+      return SRSLTE_ERROR;
+    }
+  } else {
+    printf("Setting RX gain skipped\n");
   }
-  printf("Actual TX gain: %u dB\n", actual_gain);
-  return (double)actual_gain;
+  return SRSLTE_SUCCESS;
 }
 
 double rf_lime_get_rx_gain(void* h)
