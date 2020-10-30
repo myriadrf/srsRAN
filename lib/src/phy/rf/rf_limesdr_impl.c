@@ -497,6 +497,13 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     // Default paths for > 1700 MHz
     size_t ant_rx_path = LMS_PATH_LNAH;
     size_t ant_tx_path = LMS_PATH_TX2;
+    bool skip_rx_mini_path = false;
+    bool skip_tx_mini_path = false;
+
+    if (strcmp(handler->devname, DEVNAME_MINI) == 0) {
+      skip_rx_mini_path = true;
+      skip_tx_mini_path = true;
+    }
 
     char  rxant_arg[]   = "rxant=";
     char  rxant_str[64] = {0};
@@ -505,7 +512,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     char  txant_arg[]   = "txant=";
     char  txant_str[64] = {0};
     char* txant_ptr     = strstr(args, txant_arg);
-
+    
     // RX antenna
     if (rxant_ptr) {
       copy_subdev_string(rxant_str, rxant_ptr + strlen(rxant_arg));
@@ -513,6 +520,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
       for (int i = 0; i < num_rx_antennas; i++) {
         if (strstr(rxant_str, rx_ant_list[i])) {
           ant_rx_path = i;
+          skip_rx_mini_path = false;
           break;
         }
       }
@@ -525,17 +533,19 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
       for (int i = 0; i < num_tx_antennas; i++) {
         if (strstr(txant_str, tx_ant_list[i])) {
           ant_tx_path = i;
+          skip_tx_mini_path = false;
           break;
         }
       }
     }
 
-    for (size_t i = 0; i < handler->num_tx_channels; i++)
+    for (size_t i = 0; i < handler->num_tx_channels && !skip_tx_mini_path; i++) {
       if (LMS_SetAntenna(sdr, LMS_CH_TX, i, ant_tx_path) != 0) {
         printf("LMS_SetAntenna: Failed to set TX antenna\n");
         return SRSLTE_ERROR;
       }
-    for (size_t i = 0; i < handler->num_rx_channels; i++)
+    }
+    for (size_t i = 0; i < handler->num_rx_channels && !skip_rx_mini_path; i++)
       if (LMS_SetAntenna(sdr, LMS_CH_RX, i, ant_rx_path) != 0) {
         printf("LMS_SetAntenna: Failed to set RX antenna\n");
         return SRSLTE_ERROR;

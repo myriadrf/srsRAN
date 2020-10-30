@@ -28,7 +28,7 @@
 #include <stdint.h>
 
 #define DEVNAME_USB "LimeSDR-USB"
-#define DEVNAME_MINI "LimeSDR Mini"
+#define DEVNAME_MINI "LimeSDR-Mini"
 #define DEVNAME_CC "LimeSDR-Core"
 
 SRSLTE_API int rf_lime_open(char* args, void** handler);
