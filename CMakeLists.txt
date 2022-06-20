@@ -74,9 +74,9 @@ option(ENABLE_UHD            "Enable UHD"                               ON)
 option(ENABLE_BLADERF        "Enable BladeRF"                           ON)
 option(ENABLE_SOAPYSDR       "Enable SoapySDR"                          ON)
 option(ENABLE_SKIQ           "Enable Sidekiq SDK"                       ON)
+option(ENABLE_LIMESDR        "Enable LimeSDR"                           ON)
 option(ENABLE_ZEROMQ         "Enable ZeroMQ"                            ON)
 option(ENABLE_HARDSIM        "Enable support for SIM cards"             ON)
-option(ENABLE_LIMESDR        "Enable LimeSDR"                           ON)
 
 option(ENABLE_TTCN3          "Enable TTCN3 test binaries"               OFF)
 option(ENABLE_ZMQ_TEST       "Enable ZMQ based E2E tests"               OFF)
@@ -244,6 +244,15 @@ if(ENABLE_BLADERF)
   endif(BLADERF_FOUND)
 endif(ENABLE_BLADERF)
 
+# LimeSDR
+if(ENABLE_LIMESDR)
+  find_package(LimeSDR)
+  if(LIMESDR_FOUND)
+    include_directories(${LIMESDR_INCLUDE_DIRS})
+    link_directories(${LIMESDR_LIBRARY_DIRS})
+  endif(LIMESDR_FOUND)
+endif(ENABLE_LIMESDR)
+
 # Soapy
 if(ENABLE_SOAPYSDR)
   find_package(SoapySDR)
@@ -262,21 +271,11 @@ if(ENABLE_ZEROMQ)
   endif(ZEROMQ_FOUND)
 endif(ENABLE_ZEROMQ)
 
-if(ENABLE_LIMESDR)
-  find_package(LimeSDR)
-  if(LIMESDR_FOUND)
-    include_directories(${LIMESDR_INCLUDE_DIRS})
-    link_directories(${LIMESDR_LIBRARY_DIRS})
-  endif(LIMESDR_FOUND)
-endif(ENABLE_LIMESDR)
-
-
 # TimeProf
 if(ENABLE_TIMEPROF)
     add_definitions(-DENABLE_TIMEPROF)
 endif(ENABLE_TIMEPROF)
 
-<<<<<<< HEAD
 if(BLADERF_FOUND OR UHD_FOUND OR SOAPYSDR_FOUND OR ZEROMQ_FOUND OR SKIQ_FOUND OR LIMESDR_FOUND)
   set(RF_FOUND TRUE CACHE INTERNAL "RF frontend found")
 else(BLADERF_FOUND OR UHD_FOUND OR SOAPYSDR_FOUND OR ZEROMQ_FOUND OR SKIQ_FOUND LIMESDR_FOUND)
