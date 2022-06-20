@@ -111,7 +111,7 @@ if(RF_FOUND)
 
   if (LIMESDR_FOUND AND ENABLE_LIMESDR)
     add_definitions(-DENABLE_LIMESDR)
-    set(SOURCES_LIMESDR rf_limesdr_impl.c)
+    set(SOURCES_LIMESDR rf_limesdr_imp.c)
     if (ENABLE_RF_PLUGINS)
       add_library(srsran_rf_limesdr SHARED ${SOURCES_LIMESDR})
       set_target_properties(srsran_rf_limesdr PROPERTIES VERSION ${SRSRAN_VERSION_STRING} SOVERSION ${SRSRAN_SOVERSION})

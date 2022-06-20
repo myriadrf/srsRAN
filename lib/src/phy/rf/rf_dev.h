@@ -76,13 +76,13 @@ static srsran_rf_plugin_t plugin_skiq  = {"", NULL, &srsran_rf_dev_skiq};
 #endif
 #endif
 
-/* Define implementation for Lime */
+/* Define implementation for LMS API (LimeSDR) */
 #ifdef ENABLE_LIMESDR
 #ifdef ENABLE_RF_PLUGINS
-static srsran_rf_plugin_t plugin_skiq = {"libsrsran_rf_limesdr.so", NULL, NULL};
+static srsran_rf_plugin_t plugin_lime = {"libsrsran_rf_limesdr.so", NULL, NULL};
 #else
-#include "rf_limesdr_impl.h"
-static srsran_rf_plugin_t plugin_limesdr  = {"", NULL, &srsran_rf_dev_limesdr};
+#include "rf_limesdr_imp.h"
+static srsran_rf_plugin_t plugin_lime  = {"", NULL, &srsran_rf_dev_limesdr};
 #endif
 #endif
 

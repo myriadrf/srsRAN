@@ -1,14 +1,15 @@
-/*
- * Copyright 2020 Software Radio Systems Limited/Lime MicroSystems
+/**
+ * Copyright 2013-2022 Software Radio Systems Limited 
+ * Copyright 2020-2002 Lime MicroSystems Ltd
  *
- * This file is part of srsLTE.
+ * This file is part of srsRAN.
  *
- * srsLTE is free software: you can redistribute it and/or modify
+ * srsRAN is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of
  * the License, or (at your option) any later version.
  *
- * srsLTE is distributed in the hope that it will be useful,
+ * srsRAN is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
@@ -18,6 +19,7 @@
  * and at http://www.gnu.org/licenses/.
  *
  */
+
 #include <LimeSuite.h>
 #include <pthread.h>
 #include <string.h>
@@ -25,8 +27,12 @@
 #include <unistd.h>
 
 #include "rf_helper.h"
-#include "rf_limesdr_impl.h"
-#include "srslte/srslte.h"
+#include "rf_plugin.h"
+#include "rf_limesdr_imp.h"
+#include "srsran/phy/common/phy_common.h"
+#include "srsran/phy/common/timestamp.h"
+#include "srsran/phy/utils/debug.h"
+#include "srsran/phy/utils/vector.h"
 
 #define HAVE_ASYNC_THREAD 1
 #define FORCE_USB_FAN 0
@@ -44,8 +50,8 @@ typedef struct {
   const char*   devname;
   lms_device_t* device;
 
-  lms_stream_t rxStream[SRSLTE_MAX_PORTS];
-  lms_stream_t txStream[SRSLTE_MAX_PORTS];
+  lms_stream_t rxStream[SRSRAN_MAX_PORTS];
+  lms_stream_t txStream[SRSRAN_MAX_PORTS];
   size_t       num_rx_channels;
   size_t       num_tx_channels;
   bool         tx_stream_active;
@@ -58,9 +64,9 @@ typedef struct {
   double           tx_rate;
   double           rx_rate;
   size_t           dec_inter;
-  srslte_rf_info_t info;
+  srsran_rf_info_t info;
 
-  srslte_rf_error_handler_t lime_error_handler;
+  srsran_rf_error_handler_t lime_error_handler;
   void*                     lime_error_handler_arg;
 
   bool      async_thread_running;
@@ -73,9 +79,9 @@ cf_t zero_mem[64 * 1024];
 static void log_overflow(rf_lime_handler_t* h)
 {
   if (h->lime_error_handler) {
-    srslte_rf_error_t error;
-    bzero(&error, sizeof(srslte_rf_error_t));
-    error.type = SRSLTE_RF_ERROR_OVERFLOW;
+    srsran_rf_error_t error;
+    bzero(&error, sizeof(srsran_rf_error_t));
+    error.type = SRSRAN_RF_ERROR_OVERFLOW;
     h->lime_error_handler(h->lime_error_handler_arg, error);
   }
 }
@@ -85,9 +91,9 @@ static void log_overflow(rf_lime_handler_t* h)
 static void log_underflow(rf_lime_handler_t* h)
 {
   if (h->lime_error_handler) {
-    srslte_rf_error_t error;
-    bzero(&error, sizeof(srslte_rf_error_t));
-    error.type = SRSLTE_RF_ERROR_UNDERFLOW;
+    srsran_rf_error_t error;
+    bzero(&error, sizeof(srsran_rf_error_t));
+    error.type = SRSRAN_RF_ERROR_UNDERFLOW;
     h->lime_error_handler(h->lime_error_handler_arg, error);
   }
 }
@@ -97,9 +103,9 @@ static void log_underflow(rf_lime_handler_t* h)
 static void log_late(rf_lime_handler_t* h)
 {
   if (h->lime_error_handler) {
-    srslte_rf_error_t error;
-    bzero(&error, sizeof(srslte_rf_error_t));
-    error.type = SRSLTE_RF_ERROR_LATE;
+    srsran_rf_error_t error;
+    bzero(&error, sizeof(srsran_rf_error_t));
+    error.type = SRSRAN_RF_ERROR_LATE;
     h->lime_error_handler(h->lime_error_handler_arg, error);
   }
 }
@@ -107,9 +113,9 @@ static void log_late(rf_lime_handler_t* h)
 // static void log_other(rf_lime_handler_t* h)
 //{
 //    if(h->lime_error_handler){
-//        srslte_rf_error_t error;
-//        bzero(&error, sizeof(srslte_rf_error_t));
-//        error.type = SRSLTE_RF_ERROR_OTHER;
+//        srsran_rf_error_t error;
+//        bzero(&error, sizeof(srsran_rf_error_t));
+//        error.type = SRSRAN_RF_ERROR_OTHER;
 //        h->lime_error_handler(h->lime_error_handler_arg, error);
 //    }
 //}
@@ -126,7 +132,7 @@ void rf_lime_suppress_stdout(void* h)
 #endif
 }
 
-void rf_lime_register_error_handler(void* h, srslte_rf_error_handler_t new_handler, void* arg)
+void rf_lime_register_error_handler(void* h, srsran_rf_error_handler_t new_handler, void* arg)
 {
   rf_lime_handler_t* handler      = (rf_lime_handler_t*)h;
   handler->lime_error_handler     = new_handler;
@@ -225,12 +231,12 @@ int rf_lime_start_tx_stream(void* h)
     for (size_t i = 0; i < handler->num_tx_channels; i++) {
       if (LMS_StartStream(&(handler->txStream[i])) != 0) {
         printf("LMS_StartStream: Error starting TX stream\n");
-        return SRSLTE_ERROR;
+        return SRSRAN_ERROR;
       }
     }
     handler->tx_stream_active = true;
   }
-  return SRSLTE_SUCCESS;
+  return SRSRAN_SUCCESS;
 }
 
 int rf_lime_stop_tx_stream(void* h)
@@ -240,11 +246,11 @@ int rf_lime_stop_tx_stream(void* h)
     for (size_t i = 0; i < handler->num_tx_channels; i++)
       if (LMS_StopStream(&handler->txStream[i]) != 0) {
         printf("LMS_StopStream: Error stopping TX stream\n");
-        return SRSLTE_ERROR;
+        return SRSRAN_ERROR;
       }
     handler->tx_stream_active = false;
   }
-  return SRSLTE_SUCCESS;
+  return SRSRAN_SUCCESS;
 }
 
 int rf_lime_start_rx_stream(void* h, bool now)
@@ -273,12 +279,12 @@ int rf_lime_start_rx_stream(void* h, bool now)
     for (size_t i = 0; i < handler->num_rx_channels; i++) {
       if (LMS_StartStream(&(handler->rxStream[i])) != 0) {
         printf("LMS_StartStream: Error starting RX stream\n");
-        return SRSLTE_ERROR;
+        return SRSRAN_ERROR;
       }
     }
     handler->rx_stream_active = true;
   }
-  return SRSLTE_SUCCESS;
+  return SRSRAN_SUCCESS;
 }
 
 int rf_lime_stop_rx_stream(void* h)
@@ -288,11 +294,11 @@ int rf_lime_stop_rx_stream(void* h)
     for (size_t i = 0; i < handler->num_rx_channels; i++)
       if (LMS_StopStream(&handler->rxStream[i]) != 0) {
         printf("LMS_StopStream: Error stopping RX stream\n");
-        return SRSLTE_ERROR;
+        return SRSRAN_ERROR;
       }
     handler->rx_stream_active = false;
   }
-  return SRSLTE_SUCCESS;
+  return SRSRAN_SUCCESS;
 }
 
 void rf_lime_flush_buffer(void* h)
@@ -324,7 +330,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
   printf("Number of requested channels: %d\n", num_requested_channels);
   if (num_devices == 0) {
     printf("No Lime devices found.\n");
-    return SRSLTE_ERROR;
+    return SRSRAN_ERROR;
   }
 
   for (int i = 0; i < num_devices; i++) {
@@ -358,7 +364,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
 
   if (LMS_Open(&sdr, list[lms_index], NULL) != 0) {
     printf("LMS_Open: Error opening LimeSDR device\n");
-    return SRSLTE_ERROR;
+    return SRSRAN_ERROR;
   }
 
   // Create handler
@@ -394,7 +400,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     printf("Initializing limesdr device\n");
     if (LMS_Init(sdr) != 0) {
       printf("LMS_Init: Failed to initialize LimeSDR device\n");
-      return SRSLTE_ERROR;
+      return SRSRAN_ERROR;
     }
   }
 
@@ -408,7 +414,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     printf("Setting reference clock to %.2f MHz\n", freq / 1e6);
     if (LMS_SetClockFreq(sdr, LMS_CLOCK_EXTREF, freq) != 0) {
       printf("LMS_SetClockFreq: failed to set external clock frequency\n");
-      return SRSLTE_ERROR;
+      return SRSRAN_ERROR;
     }
     remove_substring(args, refclk_arg);
     remove_substring(args, refclk_str);
@@ -423,22 +429,22 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
 #endif
 
   int num_available_channels = LMS_GetNumChannels(sdr, false);
-  handler->num_rx_channels   = SRSLTE_MIN(num_available_channels, num_requested_channels);
-  handler->num_tx_channels   = SRSLTE_MIN(num_available_channels, num_requested_channels);
+  handler->num_rx_channels   = SRSRAN_MIN(num_available_channels, num_requested_channels);
+  handler->num_tx_channels   = SRSRAN_MIN(num_available_channels, num_requested_channels);
 
   // Enable required channels
   if (num_available_channels > 0 && num_requested_channels > 0 && !handler->config_file) {
     for (size_t ch = 0; ch < handler->num_rx_channels; ch++) {
       if (LMS_EnableChannel(handler->device, LMS_CH_RX, ch, true) != 0) {
         printf("LMS_EnableChannel: Failed to enable RX channel %d\n", (int)ch);
-        return SRSLTE_ERROR;
+        return SRSRAN_ERROR;
       }
     }
 
     for (size_t ch = 0; ch < handler->num_tx_channels; ch++) {
       if (LMS_EnableChannel(handler->device, LMS_CH_TX, ch, true) != 0) {
         printf("LMS_EnableChannel: Failed to enable TX channel %d\n", (int)ch);
-        return SRSLTE_ERROR;
+        return SRSRAN_ERROR;
       }
     }
   }
@@ -469,7 +475,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     handler->rxStream[ch].isTx                = false;
     if (LMS_SetupStream(handler->device, &(handler->rxStream[ch])) != 0) {
       printf("LMS_SetupStream: Failed to set up RX stream\n");
-      return SRSLTE_ERROR;
+      return SRSRAN_ERROR;
     }
   }
 
@@ -483,7 +489,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     handler->txStream[ch].isTx                = true;
     if (LMS_SetupStream(handler->device, &(handler->txStream[ch])) != 0) {
       printf("LMS_SetupStream: Failed to set up TX stream\n");
-      return SRSLTE_ERROR;
+      return SRSRAN_ERROR;
     }
   }
 
@@ -542,13 +548,13 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     for (size_t i = 0; i < handler->num_tx_channels && !skip_tx_mini_path; i++) {
       if (LMS_SetAntenna(sdr, LMS_CH_TX, i, ant_tx_path) != 0) {
         printf("LMS_SetAntenna: Failed to set TX antenna\n");
-        return SRSLTE_ERROR;
+        return SRSRAN_ERROR;
       }
     }
     for (size_t i = 0; i < handler->num_rx_channels && !skip_rx_mini_path; i++)
       if (LMS_SetAntenna(sdr, LMS_CH_RX, i, ant_rx_path) != 0) {
         printf("LMS_SetAntenna: Failed to set RX antenna\n");
-        return SRSLTE_ERROR;
+        return SRSRAN_ERROR;
       }
   }
 
@@ -638,11 +644,11 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
   handler->async_thread_running = true;
   if (pthread_create(&handler->async_thread, NULL, async_thread, handler)) {
     printf("pthread_create error\n");
-    return SRSLTE_ERROR;
+    return SRSRAN_ERROR;
   }
 #endif
 
-  return SRSLTE_SUCCESS;
+  return SRSRAN_SUCCESS;
 }
 
 int rf_lime_open(char* args, void** h)
@@ -683,7 +689,7 @@ int rf_lime_close(void* h)
   LMS_Close(handler->device);
   free(handler);
 
-  return SRSLTE_SUCCESS;
+  return SRSRAN_SUCCESS;
 }
 
 double rf_lime_set_rx_srate(void* h, double rate)
@@ -697,13 +703,13 @@ double rf_lime_set_rx_srate(void* h, double rate)
 
   if (LMS_SetSampleRateDir(handler->device, LMS_CH_RX, rate, handler->dec_inter) != 0) {
     printf("LMS_SetSampleRate: Failed to set RX sampling rate\n");
-    return SRSLTE_ERROR;
+    return SRSRAN_ERROR;
   }
 
   double srate;
   if (LMS_GetSampleRate(handler->device, false, 0, &srate, NULL) != 0) {
     printf("LMS_GetSampleRate: Failed to get RX sampling rate\n");
-    return SRSLTE_ERROR;
+    return SRSRAN_ERROR;
   }
 
   handler->rx_rate = srate;
@@ -760,13 +766,13 @@ double rf_lime_set_tx_srate(void* h, double rate)
   if(LMS_SetSampleRate(handler->device, rate, handler->dec_inter) != 0) {
   //if (LMS_SetSampleRateDir(handler->device, LMS_CH_TX, rate, handler->dec_inter) != 0) {
     printf("LMS_SetSampleRate: Failed to set TX sampling rate\n");
-    return SRSLTE_ERROR;
+    return SRSRAN_ERROR;
   }
 
   double srate;
   if (LMS_GetSampleRate(handler->device, true, 0, &srate, NULL) != 0) {
     printf("LMS_GetSampleRate: Failed to get TX sampling rate\n");
-    return SRSLTE_ERROR;
+    return SRSRAN_ERROR;
   }
 
   printf("TX sampling rate: %.2f\n", srate / 1e6);
@@ -817,12 +823,12 @@ int rf_lime_set_rx_gain(void* h, double gain)
     for (size_t i = 0; i < handler->num_rx_channels; i++)
       if (LMS_SetGaindB(handler->device, false, 0, (unsigned)gain) != 0) {
         printf("LMS_SetGaindB: Failed to set RX gain\n");
-        return SRSLTE_ERROR;
+        return SRSRAN_ERROR;
       }
   } else {
     printf("Setting RX gain skipped\n");
   }
-  return SRSLTE_SUCCESS;
+  return SRSRAN_SUCCESS;
 }
 
 int rf_lime_set_rx_gain_ch(void* h, uint32_t ch, double gain)
@@ -831,12 +837,12 @@ int rf_lime_set_rx_gain_ch(void* h, uint32_t ch, double gain)
   if (!handler->config_file) {
     if (LMS_SetGaindB(handler->device, false, ch, (unsigned)gain) != 0) {
       printf("LMS_SetGaindB: Failed to set RX gain\n");
-      return SRSLTE_ERROR;
+      return SRSRAN_ERROR;
     }
   } else {
     printf("Setting RX gain skipped\n");
   }
-  return SRSLTE_SUCCESS;
+  return SRSRAN_SUCCESS;
 }
 
 int rf_lime_set_tx_gain(void* h, double gain)
@@ -846,12 +852,12 @@ int rf_lime_set_tx_gain(void* h, double gain)
     for (size_t i = 0; i < handler->num_tx_channels; i++)
       if (LMS_SetGaindB(handler->device, true, i, (unsigned)gain) != 0) {
         printf("LMS_SetGaindB: Failed to set TX gain\n");
-        return SRSLTE_ERROR;
+        return SRSRAN_ERROR;
       }
   } else {
     printf("Setting TX gain skipped\n");
   }
-  return SRSLTE_SUCCESS;
+  return SRSRAN_SUCCESS;
 }
 
 int rf_lime_set_tx_gain_ch(void* h, uint32_t ch, double gain)
@@ -860,12 +866,12 @@ int rf_lime_set_tx_gain_ch(void* h, uint32_t ch, double gain)
   if (!handler->config_file) {
     if (LMS_SetGaindB(handler->device, true, ch, (unsigned)gain) != 0) {
       printf("LMS_SetGaindB: Failed to set RX gain\n");
-      return SRSLTE_ERROR;
+      return SRSRAN_ERROR;
     }
   } else {
     printf("Setting RX gain skipped\n");
   }
-  return SRSLTE_SUCCESS;
+  return SRSRAN_SUCCESS;
 }
 
 double rf_lime_get_rx_gain(void* h)
@@ -874,7 +880,7 @@ double rf_lime_get_rx_gain(void* h)
   unsigned           gain    = 0;
   if (LMS_GetGaindB(handler->device, false, 0, &gain) != 0) {
     printf("LMS_GetGaindB: Failed get gain\n");
-    return SRSLTE_ERROR;
+    return SRSRAN_ERROR;
   }
   return (double)gain;
 }
@@ -885,14 +891,14 @@ double rf_lime_get_tx_gain(void* h)
   unsigned           gain    = 0;
   if (LMS_GetGaindB(handler->device, true, 0, &gain) != 0) {
     printf("LMS_GetGaindB: Failed get gain\n");
-    return SRSLTE_ERROR;
+    return SRSRAN_ERROR;
   }
   return (double)gain;
 }
 
-srslte_rf_info_t* rf_lime_get_info(void* h)
+srsran_rf_info_t* rf_lime_get_info(void* h)
 {
-  srslte_rf_info_t* info = NULL;
+  srsran_rf_info_t* info = NULL;
   if (h) {
     rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
     info                       = &handler->info;
@@ -905,13 +911,13 @@ double rf_lime_set_rx_freq(void* h, uint32_t ch, double freq)
   rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
   if (LMS_SetLOFrequency(handler->device, LMS_CH_RX, ch, freq) != 0) {
     printf("LMS_SetLOFrequency: Failed to set RX LO frequency\n");
-    return SRSLTE_ERROR;
+    return SRSRAN_ERROR;
   }
 
   double actual_freq = 0.0;
   if (LMS_GetLOFrequency(handler->device, LMS_CH_RX, ch, &actual_freq) != 0) {
     printf("LMS_GetLOFrequency: Failed to get LO frequency\n");
-    return SRSLTE_ERROR;
+    return SRSRAN_ERROR;
   }
 
   return actual_freq;
@@ -922,13 +928,13 @@ double rf_lime_set_tx_freq(void* h, uint32_t ch, double freq)
   rf_lime_handler_t* handler = (rf_lime_handler_t*)h;
   if (LMS_SetLOFrequency(handler->device, LMS_CH_TX, ch, freq) != 0) {
     printf("LMS_SetLOFrequency: Failed to set RX LO frequency\n");
-    return SRSLTE_ERROR;
+    return SRSRAN_ERROR;
   }
 
   double actual_freq = 0.0;
   if (LMS_GetLOFrequency(handler->device, LMS_CH_TX, ch, &actual_freq) != 0) {
     printf("LMS_GetLOFrequency: Failed to get LO frequency\n");
-    return SRSLTE_ERROR;
+    return SRSRAN_ERROR;
   }
 
   return actual_freq;
@@ -954,7 +960,7 @@ void rf_lime_get_time(void* h, time_t* secs, double* frac_secs)
 }
 
 int rf_lime_recv_with_time_multi(void*    h,
-                                 void*    data[SRSLTE_MAX_PORTS],
+                                 void*    data[SRSRAN_MAX_PORTS],
                                  uint32_t nsamples,
                                  bool     blocking,
                                  time_t*  secs,
@@ -964,8 +970,8 @@ int rf_lime_recv_with_time_multi(void*    h,
   lms_stream_meta_t  meta;
   uint32_t           num_total_samples           = 0;
   int                trials                      = 0;
-  int                ret[SRSLTE_MAX_PORTS]       = {0};
-  void*              buffs_ptr[SRSLTE_MAX_PORTS] = {0};
+  int                ret[SRSRAN_MAX_PORTS]       = {0};
+  void*              buffs_ptr[SRSRAN_MAX_PORTS] = {0};
 
   do {
     for (size_t ch = 0; ch < handler->num_rx_channels; ch++) {
@@ -979,14 +985,14 @@ int rf_lime_recv_with_time_multi(void*    h,
       ret[i] = LMS_RecvStream(&handler->rxStream[i], buffs_ptr[i], num_samples_left, &meta, 100);
       if (i > 0 && ret[0] != ret[i]) {
         printf("LMS_RecvStream: misaligned channel data\n");
-        return SRSLTE_ERROR;
+        return SRSRAN_ERROR;
       }
     }
 
     if (ret[0] < 0) {
       printf("LMS_RecvStream error\n");
       exit(-1);
-      return SRSLTE_ERROR;
+      return SRSRAN_ERROR;
     } else {
       if (secs != NULL && frac_secs != NULL && num_total_samples == 0) {
         timestamp_to_secs(handler->rx_rate, meta.timestamp, secs, frac_secs);
@@ -1020,13 +1026,13 @@ int rf_lime_send_timed(void*  h,
                        bool   is_start_of_burst,
                        bool   is_end_of_burst)
 {
-  void* _data[SRSLTE_MAX_PORTS] = {data, zero_mem, zero_mem, zero_mem};
+  void* _data[SRSRAN_MAX_PORTS] = {data, zero_mem, zero_mem, zero_mem};
   return rf_lime_send_timed_multi(
       h, _data, nsamples, secs, frac_secs, has_time_spec, blocking, is_start_of_burst, is_end_of_burst);
 }
 
 int rf_lime_send_timed_multi(void*  h,
-                             void*  data[SRSLTE_MAX_PORTS],
+                             void*  data[SRSRAN_MAX_PORTS],
                              int    nsamples,
                              time_t secs,
                              double frac_secs,
@@ -1040,7 +1046,7 @@ int rf_lime_send_timed_multi(void*  h,
   lms_stream_meta_t  meta;
   int                num_total_samples        = 0;
   int                trials                   = 0;
-  int                ret[SRSLTE_MAX_CHANNELS] = {0};
+  int                ret[SRSRAN_MAX_CHANNELS] = {0};
 
   meta.waitForTimestamp   = false;
   meta.flushPartialPacket = false;
@@ -1054,11 +1060,11 @@ int rf_lime_send_timed_multi(void*  h,
     meta.waitForTimestamp   = true;
     meta.flushPartialPacket = is_end_of_burst;
 
-    srslte_timestamp_t time = {secs, frac_secs};
-    meta.timestamp          = srslte_timestamp_uint64(&time, handler->tx_rate);
+    srsran_timestamp_t time = {secs, frac_secs};
+    meta.timestamp          = srsran_timestamp_uint64(&time, handler->tx_rate);
   }
 
-  void* buffs_ptr[SRSLTE_MAX_CHANNELS] = {};
+  void* buffs_ptr[SRSRAN_MAX_CHANNELS] = {};
   for (size_t ch = 0; ch < handler->num_tx_channels; ch++) {
       buffs_ptr[ch] = data[ch];
   }
@@ -1074,14 +1080,14 @@ int rf_lime_send_timed_multi(void*  h,
       ret[ch] = LMS_SendStream(&handler->txStream[ch], buffs_ptr[ch], num_samples_left, &meta, 100);
       if (ch > 0 && ret[0] != ret[ch]) {
         printf("LMS_SendStream: misaligned channel data\n");
-        return SRSLTE_ERROR;
+        return SRSRAN_ERROR;
       }
     }
 
     if (ret[0] < 0) {
       printf("LMS_SendStream error\n");
       exit(-1);
-      return SRSLTE_ERROR;
+      return SRSRAN_ERROR;
     } else {
       if (has_time_spec)
         meta.timestamp += ret[0];
