@@ -28,7 +28,7 @@
 
 #include "rf_helper.h"
 #include "rf_plugin.h"
-#include "rf_limesdr_imp.h"
+#include "rf_lime_imp.h"
 #include "srsran/phy/common/phy_common.h"
 #include "srsran/phy/common/timestamp.h"
 #include "srsran/phy/utils/debug.h"
@@ -1102,3 +1102,44 @@ int rf_lime_send_timed_multi(void*  h,
   }
   return num_total_samples;
 }
+
+rf_dev_t srsran_rf_dev_lime = {"lime",
+                               rf_lime_devname,
+                               rf_lime_start_rx_stream,
+                               rf_lime_stop_rx_stream,
+                               rf_lime_flush_buffer,
+                               rf_lime_has_rssi,
+                               rf_lime_get_rssi,
+                               rf_lime_suppress_stdout,
+                               rf_lime_register_error_handler,
+                               rf_lime_open,
+                               rf_lime_open_multi,
+                               rf_lime_close,
+                               rf_lime_set_rx_srate,
+                               rf_lime_set_rx_gain,
+                               rf_lime_set_rx_gain_ch,
+                               rf_lime_set_tx_gain,
+                               rf_lime_set_tx_gain_ch,
+                               rf_lime_get_tx_gain,
+                               rf_lime_get_rx_gain,
+                               rf_lime_get_info,
+                               rf_lime_set_rx_freq,
+                               rf_lime_set_tx_srate,
+                               rf_lime_set_tx_freq,
+                               rf_lime_get_time,
+                               NULL,
+                               rf_lime_recv_with_time,
+                               rf_lime_recv_with_time_multi,
+                               rf_lime_send_timed,
+                               .srsran_rf_send_timed_multi = rf_lime_send_timed_multi};
+
+#ifdef ENABLE_RF_PLUGINS
+int register_plugin(rf_dev_t** rf_api)
+{
+  if (rf_api == NULL) {
+    return SRSRAN_ERROR;
+  }
+  *rf_api = &srsran_rf_dev_lime;
+  return SRSRAN_SUCCESS;
+}
+#endif /* ENABLE_RF_PLUGINS */
