@@ -42,6 +42,16 @@ static srsran_rf_plugin_t plugin_blade = {"", NULL, &srsran_rf_dev_blade};
 #endif
 #endif
 
+/* Define implementation for LMS API (LimeSDR) */
+#ifdef ENABLE_LIMESDR
+#ifdef ENABLE_RF_PLUGINS
+static srsran_rf_plugin_t plugin_lime = {"libsrsran_rf_lime.so", NULL, NULL};
+#else
+#include "rf_lime_imp.h"
+static srsran_rf_plugin_t plugin_lime  = {"", NULL, &srsran_rf_dev_limesdr};
+#endif
+#endif
+
 /* Define implementation for SoapySDR */
 #ifdef ENABLE_SOAPYSDR
 #ifdef ENABLE_RF_PLUGINS
@@ -73,16 +83,6 @@ static srsran_rf_plugin_t plugin_skiq = {"libsrsran_rf_skiq.so", NULL, NULL};
 #else
 #include "rf_skiq_imp.h"
 static srsran_rf_plugin_t plugin_skiq  = {"", NULL, &srsran_rf_dev_skiq};
-#endif
-#endif
-
-/* Define implementation for LMS API (LimeSDR) */
-#ifdef ENABLE_LIMESDR
-#ifdef ENABLE_RF_PLUGINS
-static srsran_rf_plugin_t plugin_lime = {"libsrsran_rf_limesdr.so", NULL, NULL};
-#else
-#include "rf_limesdr_imp.h"
-static srsran_rf_plugin_t plugin_lime  = {"", NULL, &srsran_rf_dev_limesdr};
 #endif
 #endif
 
