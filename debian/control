@@ -1,7 +1,7 @@
 Source: srsran
 Section: universe/misc
 Priority: optional
-Maintainer: srsRAN Packagers <packagers@softwareradiosystems.com>
+Maintainer: LibreCellular <info@librecellular.org>
 Build-Depends:
     debhelper (>= 9),
     dh-exec,
@@ -10,15 +10,17 @@ Build-Depends:
     libfftw3-dev,
     libmbedtls-dev,
     libboost-program-options-dev,
+    libboost-system-dev,
     libconfig++-dev,
     libsctp-dev,
     libuhd-dev,
     uhd-host,
-    txt2man
+    txt2man,
+    liblimesuite-dev (>= 22.09)
 Standards-Version: 4.2.1
-Homepage: http://www.softwareradiosystems.com
-Vcs-Git: https://github.com/srsRAN/srsRAN.git
-Vcs-Browser: https://github.com/srsRAN/srsRAN/
+Homepage: https://librecellular.org/
+Vcs-Git: https://github.com/myriadrf/srsRAN.git
+Vcs-Browser: https://github.com/myriadrf/srsRAN/tree/lc/main
 
 Package: srsran-dev
 Architecture: any
@@ -42,7 +44,7 @@ Depends: ${shlibs:Depends},
          srsenb       (>= ${source:Version}), srsenb (<< ${source:Upstream-Version}.0~),
          srsue        (>= ${source:Version}), srsue  (<< ${source:Upstream-Version}.0~),
          srsepc       (>= ${source:Version}), srsepc (<< ${source:Upstream-Version}.0~)
-Description: LTE software suite for software defined radios (metapackage)
+Description: LTE software suite for SDRs - LibreCellular fork (metapackage)
  This software allows you to run a full end-to-end, open-source LTE system.
  It contains a UE, eNB and EPC implementation.
  .
