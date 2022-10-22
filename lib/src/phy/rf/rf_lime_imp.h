@@ -32,6 +32,8 @@
 #define DEVNAME_MINI "LimeSDR-Mini"
 #define DEVNAME_CC "LimeSDR-Core"
 
+extern rf_dev_t srsran_rf_dev_lime;
+
 SRSRAN_API int rf_lime_open(char* args, void** handler);
 
 SRSRAN_API int rf_lime_open_multi(char* args, void** handler, uint32_t num_requested_channels);
