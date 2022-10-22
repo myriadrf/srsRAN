@@ -1,3 +1,9 @@
+srsran (22.04-2) unstable; urgency=low
+
+  * srsRAN 22.04 native lime: driver fixes and disable plugins.
+
+ -- Andrew Back <andrew@abopen.com>  Sat, 22 Oct 2022 09:25:00 +0100
+
 srsran (22.04-1) unstable; urgency=low
 
   * srsRAN 22.04 with native lime (LMS API) driver patches
