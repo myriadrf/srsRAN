@@ -6,7 +6,6 @@ Build-Depends:
     debhelper (>= 9),
     dh-exec,
     cmake,
-    build-essential,
     libfftw3-dev,
     libmbedtls-dev,
     libboost-program-options-dev,
