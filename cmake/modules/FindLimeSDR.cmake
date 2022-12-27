@@ -24,7 +24,7 @@ if(NOT LIMESDR_FOUND)
   find_path(LIMESDR_INCLUDE_DIRS 
     NAMES LimeSuite.h
     HINTS $ENV{LIMESUITE_DIR}/include
-    PATHS ${LIMESDR_PKG_INCLUDE_DIRS}
+    PATHS ${LIMESDR_PKG_INCLUDE_DIRS}/lime
           /usr/include/lime
           /usr/local/include/lime
           $ENV{LIMESUITE_DIR}/include/lime
