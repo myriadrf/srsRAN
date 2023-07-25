@@ -618,7 +618,7 @@ int rf_lime_open_multi(char* args, void** h, uint32_t num_requested_channels)
     copy_subdev_string(tcxo_str, tcxo_ptr + strlen(tcxo_arg));
     int tcxo_val = atoi(tcxo_str);
     printf("Setting TCXO value to %d\n", tcxo_val);
-    if (LMS_WriteCustomBoardParam(handler->device, 0, tcxo_val, "") != 0) {
+    if (LMS_WriteCustomBoardParam(handler->device, 0, tcxo_val, NULL) != 0) {
       printf("LMS_WriteCustomBoardParam: Failed to set TCXO value\n");
     }
     remove_substring(args, tcxo_str);
@@ -960,7 +960,7 @@ void rf_lime_get_time(void* h, time_t* secs, double* frac_secs)
 }
 
 int rf_lime_recv_with_time_multi(void*    h,
-                                 void*    data[SRSRAN_MAX_PORTS],
+                                 void**    data,
                                  uint32_t nsamples,
                                  bool     blocking,
                                  time_t*  secs,
