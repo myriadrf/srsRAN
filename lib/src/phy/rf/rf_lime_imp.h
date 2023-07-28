@@ -82,7 +82,7 @@ SRSRAN_API int
 rf_lime_recv_with_time(void* h, void* data, uint32_t nsamples, bool blocking, time_t* secs, double* frac_secs);
 
 SRSRAN_API int
-rf_lime_recv_with_time_multi(void* h, void** data, uint32_t nsamples, bool blocking, time_t* secs, double* frac_secs);
+rf_lime_recv_with_time_multi(void* h, void* data[4], uint32_t nsamples, bool blocking, time_t* secs, double* frac_secs);
 
 SRSRAN_API double rf_lime_set_tx_srate(void* h, double freq);
 

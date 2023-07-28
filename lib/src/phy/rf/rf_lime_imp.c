@@ -73,7 +73,7 @@ typedef struct {
   pthread_t async_thread;
 } rf_lime_handler_t;
 
-cf_t zero_mem[64 * 1024];
+static cf_t zero_mem[64 * 1024];
 
 #if HAVE_ASYNC_THREAD
 static void log_overflow(rf_lime_handler_t* h)
