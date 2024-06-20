@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -52,6 +52,7 @@ typedef struct {
   srsran::CIPHERING_ALGORITHM_ID_ENUM encryption_algo;
   srsran::INTEGRITY_ALGORITHM_ID_ENUM integrity_algo;
   bool                                request_imeisv;
+  uint16_t                            lac;
 } s1ap_args_t;
 
 typedef struct {

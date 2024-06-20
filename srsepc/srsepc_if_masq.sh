@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# Copyright 2013-2022 Software Radio Systems Limited
+# Copyright 2013-2023 Software Radio Systems Limited
 #
 # This file is part of srsRAN
 #
@@ -26,7 +26,7 @@ sudo -v || exit
 #Check if outbound interface was specified
 if [ ! $# -eq 1 ]
   then
-    echo "Usage :'sudo ./if_masq.sh <Interface Name>' "
+    echo "Usage :'sudo ./srsepc_if_masq.sh <Interface Name>' "
     exit
 fi
 

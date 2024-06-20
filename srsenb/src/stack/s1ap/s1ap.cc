@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -41,6 +41,7 @@ using srsran::uint32_to_uint8;
 #define procError(fmt, ...) s1ap_ptr->logger.error("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
 #define procWarning(fmt, ...) s1ap_ptr->logger.warning("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
 #define procInfo(fmt, ...) s1ap_ptr->logger.info("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
+#define procDebug(fmt, ...) s1ap_ptr->logger.debug("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
 
 #define WarnUnsupportFeature(cond, featurename)                                                                        \
   do {                                                                                                                 \
@@ -246,21 +247,39 @@ srsran::proc_outcome_t s1ap::s1_setup_proc_t::start_mme_connection()
     return srsran::proc_outcome_t::success;
   }
 
-  if (not s1ap_ptr->connect_mme()) {
-    procInfo("Could not connect to MME");
-    return srsran::proc_outcome_t::error;
-  }
+  auto connect_callback = [this]() {
+    bool connected = s1ap_ptr->connect_mme();
 
-  if (not s1ap_ptr->setup_s1()) {
-    procError("S1 setup failed. Exiting...");
-    srsran::console("S1 setup failed\n");
-    s1ap_ptr->running = false;
-    return srsran::proc_outcome_t::error;
-  }
+    auto notify_result = [this, connected]() {
+      s1_setup_proc_t::s1connectresult res;
+      res.success = connected;
+      s1ap_ptr->s1setup_proc.trigger(res);
+    };
+    s1ap_ptr->task_sched.notify_background_task_result(notify_result);
+  };
+  srsran::get_background_workers().push_task(connect_callback);
+  procDebug("Connection to MME requested.");
 
-  s1ap_ptr->s1setup_timeout.run();
-  procInfo("S1SetupRequest sent. Waiting for response...");
   return srsran::proc_outcome_t::yield;
+}
+
+srsran::proc_outcome_t s1ap::s1_setup_proc_t::react(const srsenb::s1ap::s1_setup_proc_t::s1connectresult& event)
+{
+  if (event.success) {
+    procInfo("Connected to MME. Sending S1 setup request.");
+    s1ap_ptr->s1setup_timeout.run();
+    if (not s1ap_ptr->setup_s1()) {
+      procError("S1 setup failed. Exiting...");
+      srsran::console("S1 setup failed\n");
+      s1ap_ptr->running = false;
+      return srsran::proc_outcome_t::error;
+    }
+    procInfo("S1 setup request sent. Waiting for response.");
+    return srsran::proc_outcome_t::yield;
+  }
+
+  procInfo("Could not connected to MME. Aborting");
+  return srsran::proc_outcome_t::error;
 }
 
 srsran::proc_outcome_t s1ap::s1_setup_proc_t::react(const srsenb::s1ap::s1_setup_proc_t::s1setupresult& event)
@@ -329,7 +348,7 @@ int s1ap::init(const s1ap_args_t& args_, rrc_interface_s1ap* rrc_)
     }
     s1setup_proc.launch();
   };
-  mme_connect_timer.set(10000, mme_connect_run);
+  mme_connect_timer.set(args.s1_connect_timer * 1000, mme_connect_run);
   // Setup S1Setup timeout
   s1setup_timeout              = task_sched.get_unique_timer();
   uint32_t s1setup_timeout_val = 5000;
@@ -500,9 +519,39 @@ bool s1ap::connect_mme()
   using namespace srsran::net_utils;
   logger.info("Connecting to MME %s:%d", args.mme_addr.c_str(), int(MME_PORT));
 
-  // Init SCTP socket and bind it
-  if (not srsran::net_utils::sctp_init_socket(
-          &mme_socket, socket_type::seqpacket, args.s1c_bind_addr.c_str(), args.s1c_bind_port)) {
+  // Open SCTP socket
+  if (not mme_socket.open_socket(
+          srsran::net_utils::addr_family::ipv4, socket_type::seqpacket, srsran::net_utils::protocol_type::SCTP)) {
+    return false;
+  }
+
+  // Set SO_REUSE_ADDR if necessary
+  if (args.sctp_reuse_addr) {
+    if (not mme_socket.reuse_addr()) {
+      mme_socket.close();
+      return false;
+    }
+  }
+
+  // Subscribe to shutdown events
+  if (not mme_socket.sctp_subscribe_to_events()) {
+    mme_socket.close();
+    return false;
+  }
+
+  // Set SRTO_MAX
+  if (not mme_socket.sctp_set_rto_opts(args.sctp_rto_max)) {
+    return false;
+  }
+
+  // Set SCTP init options
+  if (not mme_socket.sctp_set_init_msg_opts(args.sctp_init_max_attempts, args.sctp_max_init_timeo)) {
+    return false;
+  }
+
+  // Bind socket
+  if (not mme_socket.bind_addr(args.s1c_bind_addr.c_str(), args.s1c_bind_port)) {
+    mme_socket.close();
     return false;
   }
   logger.info("SCTP socket opened. fd=%d", mme_socket.fd());
@@ -1111,6 +1160,10 @@ bool s1ap::handle_s1setupfailure(const asn1::s1ap::s1_setup_fail_s& msg)
     send_error_indication(cause);
     return false;
   }
+
+  s1_setup_proc_t::s1setupresult res;
+  res.success = false;
+  s1setup_proc.trigger(res);
 
   std::string cause = get_cause(msg->cause.value);
   logger.error("S1 Setup Failure. Cause: %s", cause.c_str());

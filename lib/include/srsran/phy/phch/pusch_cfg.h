@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -81,6 +81,7 @@ typedef struct SRSRAN_API {
 
   bool meas_epre_en;
   bool meas_ta_en;
+  bool use_cedron_alg;
   bool meas_evm_en;
 
 } srsran_pusch_cfg_t;

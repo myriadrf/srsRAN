@@ -1,6 +1,33 @@
 Change Log for Releases
 =======================
+## 23.04
+  * Introduced configurable s1 connection timer
+  * Updated 4G RRC ASN.1 to Rel 17
+  * Added reestablishment support during S1-Handover
+  * Added basic support for NSSAI based slicing in UE & gNodeB
+  * Updated the RRC to enable srsUE compatibility with new srsgnb
+  * Updated eMBMS to fix various outstanding issues
+  * Added basic support for RIC E2 interface
+  * other bug-fixes and improved stability and performance in all parts
 
+
+## 22.10
+  * Fix DL NAS integrity checks in srsUE
+  * Remove Travis and LGTM as CI platforms
+  * Remove polarssl as optional dependency (only mbedTLS used and required for security)
+  * Allow to specify multiple PLMNs in SIB1
+  * Allow non-blocking S1AP connect and expose various other SCTP options
+  * Add support to broadcast MAC backoff indicator
+  * Seperate T300/T301 timer in srsENB
+  * Fix in eMBMS payload buffer handling
+  * Fix memleak in NR scheduler
+
+## 22.04.1
+  * Various bug fixes in RLC AM and PDCP for NR
+  * Fix crash when UE attempted to reestablish in SA
+  * Remove fixed coreset0 index for SSB
+  * Add support for SIB5 and SIB6 transmission in LTE
+  
 ## 22.04
   * Added baseline 5G-SA support to srsUE and srsENB
   * Added dynamic loading of RF libraries

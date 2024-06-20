@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -56,7 +56,7 @@ public:
   void clear_buffer(uint16_t rnti);
   void add_user(uint16_t rnti);
   void rem_user(uint16_t rnti);
-  void add_bearer(uint16_t rnti, uint32_t lcid, srsran::rlc_config_t cnfg);
+  void add_bearer(uint16_t rnti, uint32_t lcid, const srsran::rlc_config_t& cnfg);
   void add_bearer_mrb(uint16_t rnti, uint32_t lcid);
   void del_bearer(uint16_t rnti, uint32_t lcid);
   bool has_bearer(uint16_t rnti, uint32_t lcid);

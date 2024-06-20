@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -145,12 +145,7 @@ public:
     mac.bch_decoded_ok(cc_idx, payload, len);
   }
 
-  void mch_decoded(uint32_t len, bool crc) final { mac.mch_decoded(len, crc); }
-
-  void new_mch_dl(const srsran_pdsch_grant_t& phy_grant, mac_interface_phy_lte::tb_action_dl_t* action) final
-  {
-    mac.new_mch_dl(phy_grant, action);
-  }
+  void mch_decoded(uint32_t len, bool crc, uint8_t* payload) final { mac.mch_decoded(len, crc, payload); }
 
   void set_mbsfn_config(uint32_t nof_mbsfn_services) final { mac.set_mbsfn_config(nof_mbsfn_services); }
 
@@ -224,6 +219,7 @@ private:
   srslog::basic_logger& rrc_logger;
   srslog::basic_logger& usim_logger;
   srslog::basic_logger& nas_logger;
+  srslog::basic_logger& nas5g_logger;
 
   // UE NR stack logging
   srslog::basic_logger& mac_nr_logger;

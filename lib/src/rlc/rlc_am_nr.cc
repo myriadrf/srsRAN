@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -32,7 +32,6 @@
 namespace srsran {
 
 const static uint32_t max_tx_queue_size = 256;
-const static uint32_t so_end_of_sdu     = 0xFFFF;
 
 /****************************************************************************
  * RLC AM NR entity
@@ -43,7 +42,8 @@ const static uint32_t so_end_of_sdu     = 0xFFFF;
  ***************************************************************************/
 rlc_am_nr_tx::rlc_am_nr_tx(rlc_am* parent_) :
   parent(parent_), rlc_am_base_tx(parent_->logger), poll_retransmit_timer(parent->timers->get_unique_timer())
-{}
+{
+}
 
 bool rlc_am_nr_tx::configure(const rlc_config_t& cfg_)
 {
@@ -63,15 +63,11 @@ bool rlc_am_nr_tx::configure(const rlc_config_t& cfg_)
       min_hdr_size = 2;
       tx_window    = std::unique_ptr<rlc_ringbuffer_base<rlc_amd_tx_pdu_nr> >(
           new rlc_ringbuffer_t<rlc_amd_tx_pdu_nr, am_window_size(rlc_am_nr_sn_size_t::size12bits)>);
-      retx_queue = std::unique_ptr<pdu_retx_queue_base<rlc_amd_retx_nr_t> >(
-          new pdu_retx_queue<rlc_amd_retx_nr_t, am_window_size(rlc_am_nr_sn_size_t::size12bits)>);
       break;
     case rlc_am_nr_sn_size_t::size18bits:
       min_hdr_size = 3;
       tx_window    = std::unique_ptr<rlc_ringbuffer_base<rlc_amd_tx_pdu_nr> >(
           new rlc_ringbuffer_t<rlc_amd_tx_pdu_nr, am_window_size(rlc_am_nr_sn_size_t::size18bits)>);
-      retx_queue = std::unique_ptr<pdu_retx_queue_base<rlc_amd_retx_nr_t> >(
-          new pdu_retx_queue<rlc_amd_retx_nr_t, am_window_size(rlc_am_nr_sn_size_t::size18bits)>);
       break;
     default:
       RlcError("attempt to configure unsupported tx_sn_field_length %s", to_string(cfg.tx_sn_field_length));
@@ -104,8 +100,8 @@ bool rlc_am_nr_tx::configure(const rlc_config_t& cfg_)
 
 bool rlc_am_nr_tx::has_data()
 {
-  return do_status() ||                                          // if we have a status PDU to transmit
-         tx_sdu_queue.get_n_sdus() != 0 || !retx_queue->empty(); // or if there is a SDU queued up for transmission
+  return do_status() ||                                         // if we have a status PDU to transmit
+         tx_sdu_queue.get_n_sdus() != 0 || !retx_queue.empty(); // or if there is a SDU queued up for transmission
 }
 
 /**
@@ -144,8 +140,8 @@ uint32_t rlc_am_nr_tx::read_pdu(uint8_t* payload, uint32_t nof_bytes)
   }
 
   // Retransmit if required
-  if (not retx_queue->empty()) {
-    RlcInfo("Re-transmission required. Retransmission queue size: %d", retx_queue->size());
+  if (not retx_queue.empty()) {
+    RlcInfo("Re-transmission required. Retransmission queue size: %d", retx_queue.size());
     return build_retx_pdu(payload, nof_bytes);
   }
 
@@ -189,6 +185,13 @@ uint32_t rlc_am_nr_tx::build_new_pdu(uint8_t* payload, uint32_t nof_bytes)
     RlcInfo("Not enough bytes for payload plus header. nof_bytes=%d", nof_bytes);
     return 0;
   }
+
+  // do not build any more PDU if window is already full
+  if (tx_window->full()) {
+    RlcInfo("Cannot build data PDU - Tx window full.");
+    return 0;
+  }
+
   // Read new SDU from TX queue
   unique_byte_buffer_t tx_sdu;
   RlcDebug("Reading from RLC SDU queue. Queue size %d", tx_sdu_queue.size());
@@ -197,7 +200,7 @@ uint32_t rlc_am_nr_tx::build_new_pdu(uint8_t* payload, uint32_t nof_bytes)
   } while (tx_sdu == nullptr && tx_sdu_queue.size() != 0);
 
   if (tx_sdu != nullptr) {
-    RlcDebug("Read RLC SDU - %d bytes", tx_sdu->N_bytes);
+    RlcDebug("Read RLC SDU - RLC_SN=%d, PDCP_SN=%d, %d bytes", st.tx_next, tx_sdu->md.pdcp_sn, tx_sdu->N_bytes);
   } else {
     RlcDebug("No SDUs left in the tx queue.");
     return 0;
@@ -273,10 +276,10 @@ uint32_t rlc_am_nr_tx::build_new_sdu_segment(rlc_amd_tx_pdu_nr& tx_pdu, uint8_t*
 
   // Sanity check: can this SDU be sent considering header overhead?
   if (nof_bytes <= min_hdr_size) { // Small header as SO is not present
-    RlcError("cannot build new sdu_segment, there are not enough bytes allocated to tx header plus data. nof_bytes=%d, "
-             "min_hdr_size=%d",
-             nof_bytes,
-             min_hdr_size);
+    RlcInfo("cannot build new sdu_segment, there are not enough bytes allocated to tx header plus data. nof_bytes=%d, "
+            "min_hdr_size=%d",
+            nof_bytes,
+            min_hdr_size);
     return 0;
   }
 
@@ -346,10 +349,10 @@ uint32_t rlc_am_nr_tx::build_continuation_sdu_segment(rlc_amd_tx_pdu_nr& tx_pdu,
 
   // Sanity check: can this SDU be sent considering header overhead?
   if (nof_bytes <= max_hdr_size) { // Larger header size, as SO is present
-    RlcError("cannot build new sdu_segment, there are not enough bytes allocated to tx header plus data. nof_bytes=%d, "
-             "max_header_size=%d",
-             nof_bytes,
-             max_hdr_size);
+    RlcInfo("cannot build new sdu_segment, there are not enough bytes allocated to tx header plus data. nof_bytes=%d, "
+            "max_header_size=%d",
+            nof_bytes,
+            max_hdr_size);
     return 0;
   }
 
@@ -444,19 +447,19 @@ uint32_t rlc_am_nr_tx::build_continuation_sdu_segment(rlc_amd_tx_pdu_nr& tx_pdu,
 uint32_t rlc_am_nr_tx::build_retx_pdu(uint8_t* payload, uint32_t nof_bytes)
 {
   // Check there is at least 1 element before calling front()
-  if (retx_queue->empty()) {
+  if (retx_queue.empty()) {
     RlcError("in build_retx_pdu(): retx_queue is empty");
     return 0;
   }
 
-  rlc_amd_retx_nr_t& retx = retx_queue->front();
+  rlc_amd_retx_nr_t& retx = retx_queue.front();
 
   // Sanity check - drop any retx SNs not present in tx_window
   while (not tx_window->has_sn(retx.sn)) {
     RlcInfo("SN=%d not in tx window, probably already ACKed. Skip and remove from retx queue", retx.sn);
-    retx_queue->pop();
-    if (!retx_queue->empty()) {
-      retx = retx_queue->front();
+    retx_queue.pop();
+    if (!retx_queue.empty()) {
+      retx = retx_queue.front();
     } else {
       RlcInfo("empty retx queue, cannot provide any retx PDU");
       return 0;
@@ -550,7 +553,7 @@ rlc_am_nr_tx::build_retx_pdu_without_segmentation(const rlc_amd_retx_nr_t retx, 
 
   // Update RETX queue. This must be done before calculating
   // the polling bit, to make sure the poll bit is calculated correctly
-  retx_queue->pop();
+  retx_queue.pop();
 
   // Write header to payload
   rlc_am_nr_pdu_header_t new_header = tx_pdu.header;
@@ -623,7 +626,10 @@ uint32_t rlc_am_nr_tx::build_retx_pdu_with_segmentation(rlc_amd_retx_nr_t& retx,
 
   // Sanity check: are there enough bytes for header plus data?
   if (nof_bytes <= expected_hdr_len) {
-    RlcError("called %s, but there are not enough bytes for data plus header. SN=%d", __FUNCTION__, retx.sn);
+    RlcInfo("Not enough bytes for RETX payload plus header. SN=%d, nof_bytes=%d, hdr_len=%d",
+            retx.sn,
+            nof_bytes,
+            expected_hdr_len);
     return 0;
   }
 
@@ -786,15 +792,38 @@ void rlc_am_nr_tx::handle_control_pdu(uint8_t* payload, uint32_t nof_bytes)
   rlc_am_nr_read_status_pdu(payload, nof_bytes, cfg.tx_sn_field_length, &status);
   log_rlc_am_nr_status_pdu_to_string(logger.info, "RX status PDU: %s", &status, parent->rb_name);
 
+  /*
+   * Sanity check the received status report.
+   * Checking if the ACK_SN is inside the valid ACK_SN window (the TX window "off-by-one")
+   * makes sure we discard out of order status reports.
+   * Checking if ACK_SN > Tx_Next + 1 makes sure we do not receive a ACK/NACK for something we did not TX
+   * ACK_SN may be equal to TX_NEXT + 1, if not all SDU segments with SN=TX_NEXT have been transmitted.
+   */
+  if (not valid_ack_sn(status.ack_sn)) {
+    RlcInfo("Received ACK with SN outside of TX_WINDOW, ignoring status report. ACK_SN=%d, TX_NEXT_ACK=%d.",
+            status.ack_sn,
+            st.tx_next_ack);
+    info_state();
+    return;
+  }
+
+  if (tx_mod_base_nr(status.ack_sn) > tx_mod_base_nr(st.tx_next + 1)) {
+    RlcWarning("Received ACK with SN larger than TX_NEXT, ignoring status report.  SN=%d, TX_NEXT_ACK=%d, TX_NEXT=%d",
+               status.ack_sn,
+               st.tx_next_ack,
+               st.tx_next);
+    info_state();
+    return;
+  }
+
   /**
    * Section 5.3.3.3: Reception of a STATUS report
    * - if the STATUS report comprises a positive or negative acknowledgement for the RLC SDU with sequence
    *   number equal to POLL_SN:
    *   - if t-PollRetransmit is running:
    *     - stop and reset t-PollRetransmit.
-   *
    */
-  if (tx_mod_base_nr(st.poll_sn) <= tx_mod_base_nr(status.ack_sn)) {
+  if (tx_mod_base_nr(st.poll_sn) < tx_mod_base_nr(status.ack_sn)) {
     if (poll_retransmit_timer.is_running()) {
       RlcDebug("Received ACK or NACK for POLL_SN=%d. Stopping t-PollRetransmit", st.poll_sn);
       poll_retransmit_timer.stop();
@@ -811,19 +840,14 @@ void rlc_am_nr_tx::handle_control_pdu(uint8_t* payload, uint32_t nof_bytes)
    *   - consider the RLC SDU or the RLC SDU segment for which a negative acknowledgement was received for
    *     retransmission.
    */
+  // Process ACKs
   uint32_t stop_sn = status.nacks.size() == 0
                          ? status.ack_sn
                          : status.nacks[0].nack_sn; // Stop processing ACKs at the first NACK, if it exists.
-  if (tx_mod_base_nr(stop_sn) > tx_mod_base_nr(st.tx_next)) {
-    RlcError("Received ACK or NACK with SN=%d larger than TX_NEXT=%d. Ignoring status report", stop_sn, st.tx_next);
-    info_state();
-    return;
-  }
-
-  // Process ACKs
   for (uint32_t sn = st.tx_next_ack; tx_mod_base_nr(sn) < tx_mod_base_nr(stop_sn); sn = (sn + 1) % mod_nr) {
     if (tx_window->has_sn(sn)) {
       notify_info_vec.push_back((*tx_window)[sn].pdcp_sn);
+      retx_queue.remove_sn(sn); // remove any pending retx for that SN
       tx_window->remove_pdu(sn);
       st.tx_next_ack = (sn + 1) % mod_nr;
     } else {
@@ -837,106 +861,29 @@ void rlc_am_nr_tx::handle_control_pdu(uint8_t* payload, uint32_t nof_bytes)
   std::set<uint32_t> retx_sn_set; // Set of PDU SNs added for retransmission (no duplicates)
   for (uint32_t nack_idx = 0; nack_idx < status.nacks.size(); nack_idx++) {
     if (status.nacks[nack_idx].has_nack_range) {
-      RlcWarning("Handling NACK ranges is not yet implemented. Ignoring NACK across %d SDU(s) starting from SN=%d",
-                 status.nacks[nack_idx].nack_range,
-                 status.nacks[nack_idx].nack_sn);
-      continue;
-    }
-    if (tx_mod_base_nr(st.tx_next_ack) <= tx_mod_base_nr(status.nacks[nack_idx].nack_sn) &&
-        tx_mod_base_nr(status.nacks[nack_idx].nack_sn) <= tx_mod_base_nr(st.tx_next)) {
-      RlcDebug("Handling NACK for SN=%d", status.nacks[nack_idx].nack_sn);
-      auto     nack    = status.nacks[nack_idx];
-      uint32_t nack_sn = nack.nack_sn;
-      if (tx_window->has_sn(nack_sn)) {
-        auto& pdu = (*tx_window)[nack_sn];
-
-        if (nack.has_so) {
-          // NACK'ing missing bytes in SDU segment.
-          // Retransmit all SDU segments within those missing bytes.
-          if (pdu.segment_list.empty()) {
-            RlcError("Received NACK with SO, but there is no segment information. SN=%d", nack_sn);
+      for (uint32_t range_sn = status.nacks[nack_idx].nack_sn;
+           range_sn < status.nacks[nack_idx].nack_sn + status.nacks[nack_idx].nack_range;
+           range_sn++) {
+        rlc_status_nack_t nack = {};
+        nack.nack_sn           = range_sn;
+        if (status.nacks[nack_idx].has_so) {
+          // Apply so_start to first range item
+          if (range_sn == status.nacks[nack_idx].nack_sn) {
+            nack.so_start = status.nacks[nack_idx].so_start;
           }
-          bool segment_found = false;
-          for (const rlc_amd_tx_pdu_nr::pdu_segment& segm : pdu.segment_list) {
-            if (segm.so >= nack.so_start && segm.so <= nack.so_end) {
-              if (not retx_queue->has_sn(nack_sn, segm.so)) {
-                rlc_amd_retx_nr_t& retx = retx_queue->push();
-                retx.sn                 = nack_sn;
-                retx.is_segment         = true;
-                retx.so_start           = segm.so;
-                retx.current_so         = segm.so;
-                retx.segment_length     = segm.payload_len;
-                retx_sn_set.insert(nack_sn);
-                RlcInfo("Scheduled RETX of SDU segment SN=%d, so_start=%d, segment_length=%d",
-                        retx.sn,
-                        retx.so_start,
-                        retx.segment_length);
-              } else {
-                RlcInfo("Skip already scheduled RETX of SDU segment SN=%d, so_start=%d, segment_length=%d",
-                        nack_sn,
-                        segm.so,
-                        segm.payload_len);
-              }
-              segment_found = true;
-            }
+          // Apply so_end to last range item
+          if (range_sn == (status.nacks[nack_idx].nack_sn + status.nacks[nack_idx].nack_range - 1)) {
+            nack.so_end = status.nacks[nack_idx].so_end;
           }
-          if (!segment_found) {
-            RlcWarning("Could not find segment for NACK_SN=%d. SO_start=%d, SO_end=%d",
-                       status.nacks[nack_idx].nack_sn,
-                       nack.so_start,
-                       nack.so_end);
-            for (const rlc_amd_tx_pdu_nr::pdu_segment& segm : pdu.segment_list) {
-              RlcDebug(
-                  "Segments for SN=%d. SO=%d, SO_end=%d", status.nacks[nack_idx].nack_sn, segm.so, segm.payload_len);
-            }
-          }
-        } else {
-          // NACK'ing full SDU.
-          // add to retx queue if it's not already there
-          if (not retx_queue->has_sn(nack_sn)) {
-            // Have we segmented the SDU already?
-            if ((*tx_window)[nack_sn].segment_list.empty()) {
-              rlc_amd_retx_nr_t& retx = retx_queue->push();
-              retx.sn                 = nack_sn;
-              retx.is_segment         = false;
-              retx.so_start           = 0;
-              retx.current_so         = 0;
-              retx.segment_length     = pdu.sdu_buf->N_bytes;
-              retx_sn_set.insert(nack_sn);
-              RlcInfo("Scheduled RETX of SDU SN=%d", retx.sn);
-            } else {
-              RlcInfo("Scheduled RETX of SDU SN=%d", nack_sn);
-              retx_sn_set.insert(nack_sn);
-              for (auto segm : (*tx_window)[nack_sn].segment_list) {
-                rlc_amd_retx_nr_t& retx = retx_queue->push();
-                retx.sn                 = nack_sn;
-                retx.is_segment         = true;
-                retx.so_start           = segm.so;
-                retx.current_so         = segm.so;
-                retx.segment_length     = segm.payload_len;
-                RlcInfo("Scheduled RETX of SDU Segment. SN=%d, SO=%d, len=%d", retx.sn, segm.so, segm.payload_len);
-              }
-            }
-          } else {
-            RlcInfo("RETX queue already has NACK_SN. SDU SN=%d, Tx_Next_Ack=%d, Tx_Next=%d",
-                    status.nacks[nack_idx].nack_sn,
-                    st.tx_next_ack,
-                    st.tx_next);
-          }
+          // Enable has_so only if the offsets do not span the whole SDU
+          nack.has_so = (nack.so_start != 0) || (nack.so_end != rlc_status_nack_t::so_end_of_sdu);
         }
-      } else {
-        RlcInfo("TX window does not contain NACK_SN. SDU SN=%d, Tx_Next_Ack=%d, Tx_Next=%d",
-                status.nacks[nack_idx].nack_sn,
-                st.tx_next_ack,
-                st.tx_next);
-      } // TX window containts NACK SN
+        handle_nack(nack, retx_sn_set);
+      }
     } else {
-      RlcInfo("RETX not in expected range. SDU SN=%d, Tx_Next_Ack=%d, Tx_Next=%d",
-              status.nacks[nack_idx].nack_sn,
-              st.tx_next_ack,
-              st.tx_next);
-    } // NACK SN within expected range
-  }   // NACK loop
+      handle_nack(status.nacks[nack_idx], retx_sn_set);
+    }
+  }
 
   // Process retx_count and inform upper layers if needed
   for (uint32_t retx_sn : retx_sn_set) {
@@ -961,6 +908,98 @@ void rlc_am_nr_tx::handle_control_pdu(uint8_t* payload, uint32_t nof_bytes)
   notify_info_vec.clear();
 }
 
+void rlc_am_nr_tx::handle_nack(const rlc_status_nack_t& nack, std::set<uint32_t>& retx_sn_set)
+{
+  if (tx_mod_base_nr(st.tx_next_ack) <= tx_mod_base_nr(nack.nack_sn) &&
+      tx_mod_base_nr(nack.nack_sn) <= tx_mod_base_nr(st.tx_next)) {
+    RlcDebug("Handling NACK for SN=%d", nack.nack_sn);
+    if (tx_window->has_sn(nack.nack_sn)) {
+      auto& pdu = (*tx_window)[nack.nack_sn];
+
+      if (nack.has_so) {
+        // NACK'ing missing bytes in SDU segment.
+        // Retransmit all SDU segments within those missing bytes.
+        if (pdu.segment_list.empty()) {
+          RlcError("Received NACK with SO, but there is no segment information. SN=%d", nack.nack_sn);
+        }
+        bool segment_found = false;
+        for (const rlc_amd_tx_pdu_nr::pdu_segment& segm : pdu.segment_list) {
+          if (segm.so >= nack.so_start && segm.so <= nack.so_end) {
+            if (not retx_queue.has_sn(nack.nack_sn, segm.so)) {
+              rlc_amd_retx_nr_t& retx = retx_queue.push();
+              retx.sn                 = nack.nack_sn;
+              retx.is_segment         = true;
+              retx.so_start           = segm.so;
+              retx.current_so         = segm.so;
+              retx.segment_length     = segm.payload_len;
+              retx_sn_set.insert(nack.nack_sn);
+              RlcInfo("Scheduled RETX of SDU segment SN=%d, so_start=%d, segment_length=%d",
+                      retx.sn,
+                      retx.so_start,
+                      retx.segment_length);
+            } else {
+              RlcInfo("Skip already scheduled RETX of SDU segment SN=%d, so_start=%d, segment_length=%d",
+                      nack.nack_sn,
+                      segm.so,
+                      segm.payload_len);
+            }
+            segment_found = true;
+          }
+        }
+        if (!segment_found) {
+          RlcWarning("Could not find segment for NACK_SN=%d. SO_start=%d, SO_end=%d",
+                     nack.nack_sn,
+                     nack.so_start,
+                     nack.so_end);
+          for (const rlc_amd_tx_pdu_nr::pdu_segment& segm : pdu.segment_list) {
+            RlcDebug("Segments for SN=%d. SO=%d, SO_end=%d", nack.nack_sn, segm.so, segm.payload_len);
+          }
+        }
+      } else {
+        // NACK'ing full SDU.
+        // add to retx queue if it's not already there
+        if (not retx_queue.has_sn(nack.nack_sn)) {
+          // Have we segmented the SDU already?
+          if ((*tx_window)[nack.nack_sn].segment_list.empty()) {
+            rlc_amd_retx_nr_t& retx = retx_queue.push();
+            retx.sn                 = nack.nack_sn;
+            retx.is_segment         = false;
+            retx.so_start           = 0;
+            retx.current_so         = 0;
+            retx.segment_length     = pdu.sdu_buf->N_bytes;
+            retx_sn_set.insert(nack.nack_sn);
+            RlcInfo("Scheduled RETX of SDU SN=%d", retx.sn);
+          } else {
+            RlcInfo("Scheduled RETX of SDU SN=%d", nack.nack_sn);
+            retx_sn_set.insert(nack.nack_sn);
+            for (auto segm : (*tx_window)[nack.nack_sn].segment_list) {
+              rlc_amd_retx_nr_t& retx = retx_queue.push();
+              retx.sn                 = nack.nack_sn;
+              retx.is_segment         = true;
+              retx.so_start           = segm.so;
+              retx.current_so         = segm.so;
+              retx.segment_length     = segm.payload_len;
+              RlcInfo("Scheduled RETX of SDU Segment. SN=%d, SO=%d, len=%d", retx.sn, segm.so, segm.payload_len);
+            }
+          }
+        } else {
+          RlcInfo("RETX queue already has NACK_SN. SDU SN=%d, Tx_Next_Ack=%d, Tx_Next=%d",
+                  nack.nack_sn,
+                  st.tx_next_ack,
+                  st.tx_next);
+        }
+      }
+    } else {
+      RlcInfo("TX window does not contain NACK_SN. SDU SN=%d, Tx_Next_Ack=%d, Tx_Next=%d",
+              nack.nack_sn,
+              st.tx_next_ack,
+              st.tx_next);
+    } // TX window containts NACK SN
+  } else {
+    RlcInfo(
+        "RETX not in expected range. SDU SN=%d, Tx_Next_Ack=%d, Tx_Next=%d", nack.nack_sn, st.tx_next_ack, st.tx_next);
+  } // NACK SN within expected range
+}
 /**
  * Helper to check if a SN has reached the max reTx threshold
  *
@@ -1010,9 +1049,7 @@ void rlc_am_nr_tx::get_buffer_state(uint32_t& n_bytes_new, uint32_t& n_bytes_pri
   }
 
   // Bytes needed for retx
-  size_t n_retx = retx_queue->size();
-  for (size_t i = 0; i < n_retx; i++) {
-    rlc_amd_retx_nr_t& retx = (*retx_queue)[i];
+  for (const rlc_amd_retx_nr_t& retx : retx_queue.get_inner_queue()) {
     RlcDebug("buffer state - retx - SN=%d, Segment: %s, %d:%d",
              retx.sn,
              retx.is_segment ? "true" : "false",
@@ -1027,6 +1064,8 @@ void rlc_am_nr_tx::get_buffer_state(uint32_t& n_bytes_new, uint32_t& n_bytes_pri
         n_bytes_prio += (req_bytes + hdr_req_bytes);
         RlcDebug("buffer state - retx: %d bytes", n_bytes_prio);
       }
+    } else {
+      RlcWarning("buffer state - retx for SN=%d is outside the tx_window", retx.sn);
     }
   }
 
@@ -1113,7 +1152,7 @@ uint8_t rlc_am_nr_tx::get_pdu_poll(uint32_t sn, bool is_retx, uint32_t sdu_bytes
    * - if no new RLC SDU can be transmitted after the transmission of the AMD PDU (e.g. due to window stalling);
    *   - include a poll in the AMD PDU as described below.
    */
-  if ((tx_sdu_queue.is_empty() && retx_queue->empty() && sdu_under_segmentation_sn == INVALID_RLC_SN) ||
+  if ((tx_sdu_queue.is_empty() && retx_queue.empty() && sdu_under_segmentation_sn == INVALID_RLC_SN) ||
       tx_window->full()) {
     RlcDebug("Setting poll bit due to empty buffers/inablity to TX. SN=%d, POLL_SN=%d", sn, st.poll_sn);
     poll = 1;
@@ -1194,7 +1233,7 @@ void rlc_am_nr_tx::stop()
   tx_window->clear();
 
   // Drop all messages in RETX queue
-  retx_queue->clear();
+  retx_queue.clear();
 
   tx_enabled = false;
 }
@@ -1216,7 +1255,7 @@ void rlc_am_nr_tx::timer_expired(uint32_t timeout_id)
      *   - consider any RLC SDU which has not been positively acknowledged for retransmission.
      * - include a poll in an AMD PDU as described in section 5.3.3.2.
      */
-    if ((tx_sdu_queue.is_empty() && retx_queue->empty()) || tx_window->full()) {
+    if ((tx_sdu_queue.is_empty() && retx_queue.empty()) || tx_window->full()) {
       if (tx_window->empty()) {
         RlcError("t-PollRetransmit expired, but the tx_window is empty. POLL_SN=%d, Tx_Next_Ack=%d, tx_window_size=%d",
                  st.poll_sn,
@@ -1235,7 +1274,7 @@ void rlc_am_nr_tx::timer_expired(uint32_t timeout_id)
       // RETX first RLC SDU that has not been ACKed
       // or first SDU segment of the first RLC SDU
       // that has not been acked
-      rlc_amd_retx_nr_t& retx = retx_queue->push();
+      rlc_amd_retx_nr_t& retx = retx_queue.push();
       retx.sn                 = st.tx_next_ack;
       if ((*tx_window)[st.tx_next_ack].segment_list.empty()) {
         // Full SDU
@@ -1284,6 +1323,21 @@ bool rlc_am_nr_tx::inside_tx_window(uint32_t sn) const
 }
 
 /*
+ * This function is used to check if a received status report
+ * as a valid ACK_SN.
+ *
+ * ACK_SN may be equal to TX_NEXT + AM_Window_Size if the PDU
+ * with SN=TX_NEXT+AM_Window_Size has been received by the RX
+ * An ACK_SN == Tx_Next_Ack doesn't ACK or NACKs any PDUs, as
+ * such, such a status report can be discarded.
+ */
+bool rlc_am_nr_tx::valid_ack_sn(uint32_t sn) const
+{
+  // Tx_Next_Ack < SN <= TX_Next + AM_Window_Size
+  return (0 < tx_mod_base_nr(sn)) && (tx_mod_base_nr(sn) <= tx_window_size());
+}
+
+/*
  * Debug Helpers
  */
 void rlc_am_nr_tx::debug_state() const
@@ -1320,7 +1374,8 @@ rlc_am_nr_rx::rlc_am_nr_rx(rlc_am* parent_) :
   status_prohibit_timer(parent->timers->get_unique_timer()),
   reassembly_timer(parent->timers->get_unique_timer()),
   rlc_am_base_rx(parent_, parent_->logger)
-{}
+{
+}
 
 bool rlc_am_nr_rx::configure(const rlc_config_t& cfg_)
 {
@@ -1393,19 +1448,23 @@ void rlc_am_nr_rx::handle_data_pdu(uint8_t* payload, uint32_t nof_bytes)
   RlcHexInfo(payload, nof_bytes, "Rx data PDU SN=%d (%d B)", header.sn, nof_bytes);
   log_rlc_am_nr_pdu_header_to_string(logger.debug, header, rb_name);
 
+  // Trigger polling if poll bit is set.
+  // We do this before checking if the PDU is inside the RX window,
+  // as the RX window may have advanced without the TX having received the ACKs
+  // This can cause a data stall, whereby the TX keeps retransmiting
+  // a PDU outside of the Rx window.
+  // Also, we do this before discarding duplicate SDUs/SDU segments
+  // Because t-PollRetransmit may transmit a PDU that was already
+  // received.
+  if (header.p != 0U) {
+    RlcInfo("status packet requested through polling bit");
+    do_status = true;
+  }
+
   // Check whether SDU is within Rx Window
   if (!inside_rx_window(header.sn)) {
     RlcInfo("SN=%d outside rx window [%d:%d] - discarding", header.sn, st.rx_next, st.rx_next + rx_window_size());
     return;
-  }
-
-  // Trigger polling if poll bit is set.
-  // We do this before discarding duplicate SDUs/SDU segments
-  // Because t-PollRetransmit may transmit a PDU that was already
-  // received.
-  if (header.p) {
-    RlcInfo("status packet requested through polling bit");
-    do_status = true;
   }
 
   // Section 5.2.3.2.2, discard duplicate PDUs
@@ -1736,7 +1795,7 @@ uint32_t rlc_am_nr_rx::get_status_pdu(rlc_am_nr_status_pdu_t* status, uint32_t m
           nack.nack_sn  = i;
           nack.has_so   = true;
           nack.so_start = last_so;
-          nack.so_end   = so_end_of_sdu;
+          nack.so_end   = rlc_status_nack_t::so_end_of_sdu;
           status->push_nack(nack);
           RlcDebug(
               "Final segment missing. NACK_SN=%d. SO_start=%d, SO_end=%d", nack.nack_sn, nack.so_start, nack.so_end);
@@ -1766,7 +1825,7 @@ uint32_t rlc_am_nr_rx::get_status_pdu(rlc_am_nr_status_pdu_t* status, uint32_t m
 
   if (max_len != UINT32_MAX) {
     // UINT32_MAX is used just to query the status PDU length
-    if (status_prohibit_timer.is_valid()) {
+    if (status_prohibit_timer.is_valid() && cfg.t_status_prohibit != 0) {
       status_prohibit_timer.run();
     }
     do_status = false;
@@ -1784,7 +1843,11 @@ uint32_t rlc_am_nr_rx::get_status_pdu_length()
 
 bool rlc_am_nr_rx::get_do_status()
 {
-  return do_status.load(std::memory_order_relaxed) && not status_prohibit_timer.is_running();
+  if (cfg.t_status_prohibit != 0) {
+    return do_status.load(std::memory_order_relaxed) && not status_prohibit_timer.is_running();
+  } else {
+    return do_status.load(std::memory_order_relaxed);
+  }
 }
 
 void rlc_am_nr_rx::timer_expired(uint32_t timeout_id)
@@ -1818,11 +1881,11 @@ void rlc_am_nr_rx::timer_expired(uint32_t timeout_id)
       }
     }
     st.rx_highest_status = sn_upd;
-    if (not inside_rx_window(st.rx_highest_status)) {
+    if (not valid_ack_sn(st.rx_highest_status)) {
       RlcError("Rx_Highest_Status not inside RX window");
       debug_state();
     }
-    srsran_assert(inside_rx_window(st.rx_highest_status), "Error: rx_highest_status assigned outside rx window");
+    srsran_assert(valid_ack_sn(st.rx_highest_status), "Error: rx_highest_status assigned outside rx window");
 
     bool restart_reassembly_timer = false;
     if (rx_mod_base_nr(st.rx_next_highest) > rx_mod_base_nr(st.rx_highest_status + 1)) {
@@ -1860,37 +1923,8 @@ void rlc_am_nr_rx::write_to_upper_layers(uint32_t lcid, unique_byte_buffer_t sdu
 }
 
 /*
- * Window Helpers
+ * Segment Helpers
  */
-uint32_t rlc_am_nr_rx::rx_mod_base_nr(uint32_t sn) const
-{
-  return (sn - st.rx_next) % mod_nr;
-}
-
-uint32_t rlc_am_nr_rx::rx_window_size() const
-{
-  return am_window_size(cfg.rx_sn_field_length);
-}
-
-bool rlc_am_nr_rx::inside_rx_window(uint32_t sn)
-{
-  // RX_Next <= SN < RX_Next + AM_Window_Size
-  return rx_mod_base_nr(sn) < rx_window_size();
-}
-
-/*
- * Metrics
- */
-uint32_t rlc_am_nr_rx::get_sdu_rx_latency_ms()
-{
-  return 0;
-}
-
-uint32_t rlc_am_nr_rx::get_rx_buffered_bytes()
-{
-  return 0;
-}
-
 void rlc_am_nr_rx::insert_received_segment(rlc_amd_rx_pdu_nr                                   segment,
                                            std::set<rlc_amd_rx_pdu_nr, rlc_amd_rx_pdu_nr_cmp>& segment_list) const
 {
@@ -1928,6 +1962,40 @@ void rlc_am_nr_rx::update_segment_inventory(rlc_amd_rx_sdu_nr_t& rx_sdu) const
 }
 
 /*
+ * Window Helpers
+ */
+uint32_t rlc_am_nr_rx::rx_mod_base_nr(uint32_t sn) const
+{
+  return (sn - st.rx_next) % mod_nr;
+}
+
+uint32_t rlc_am_nr_rx::rx_window_size() const
+{
+  return am_window_size(cfg.rx_sn_field_length);
+}
+
+bool rlc_am_nr_rx::inside_rx_window(uint32_t sn) const
+{
+  // RX_Next <= SN < RX_Next + AM_Window_Size
+  return rx_mod_base_nr(sn) < rx_window_size();
+}
+
+/*
+ * This function is used to check if the Rx_Highest_Status is
+ * valid when t-Reasseambly expires.
+ *
+ * ACK_SN may be equal to RX_NEXT + AM_Window_Size if the PDU
+ * with SN=RX_NEXT+AM_Window_Size has been received by the RX.
+ * An ACK_SN == Rx_Next should not update Rx_Highest_Status,
+ * it should be updated when Rx_Next is updated.
+ */
+bool rlc_am_nr_rx::valid_ack_sn(uint32_t sn) const
+{
+  // RX_Next < SN <= RX_Next + AM_Window_Size
+  return (0 < rx_mod_base_nr(sn)) && (rx_mod_base_nr(sn) <= rx_window_size());
+}
+
+/*
  * Debug Helpers
  */
 void rlc_am_nr_rx::debug_state() const
@@ -1943,5 +2011,18 @@ void rlc_am_nr_rx::debug_window() const
 {
   RlcDebug(
       "RX window state: Rx_Next=%d, Rx_Next_Highest=%d, SDUs %d", st.rx_next, st.rx_next_highest, rx_window->size());
+}
+
+/*
+ * Metrics
+ */
+uint32_t rlc_am_nr_rx::get_sdu_rx_latency_ms()
+{
+  return 0;
+}
+
+uint32_t rlc_am_nr_rx::get_rx_buffered_bytes()
+{
+  return 0;
 }
 } // namespace srsran

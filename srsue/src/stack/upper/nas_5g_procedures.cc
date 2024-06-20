@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -20,7 +20,7 @@
  */
 
 #include "srsue/hdr/stack/upper/nas_5g_procedures.h"
-
+#include "srsran/common/standard_streams.h"
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -51,8 +51,8 @@ nas_5g::pdu_session_establishment_procedure::pdu_session_establishment_procedure
   logger(logger_), parent_nas(parent_nas_)
 {}
 
-srsran::proc_outcome_t nas_5g::pdu_session_establishment_procedure::init(const uint16_t          pdu_session_id_,
-                                                                         const pdu_session_cfg_t pdu_session_cfg)
+srsran::proc_outcome_t nas_5g::pdu_session_establishment_procedure::init(const uint16_t           pdu_session_id_,
+                                                                         const pdu_session_cfg_t& pdu_session_cfg)
 {
   // Get PDU transaction identity
   transaction_identity = parent_nas->allocate_next_proc_trans_id();
@@ -86,7 +86,10 @@ srsran::proc_outcome_t nas_5g::pdu_session_establishment_procedure::react(
 srsran::proc_outcome_t nas_5g::pdu_session_establishment_procedure::react(
     const srsran::nas_5g::pdu_session_establishment_reject_t& session_est_reject)
 {
-  logger.info("PDU Session Establishment Reject with cause: %s", session_est_reject.cause_5gsm.cause_value.to_string());
+  logger.error("PDU Session Establishment Reject with cause: %s",
+               session_est_reject.cause_5gsm.cause_value.to_string());
+  srsran::console("PDU Session Establishment Reject with cause: %s\n",
+                  session_est_reject.cause_5gsm.cause_value.to_string());
   return srsran::proc_outcome_t::error;
 }
 

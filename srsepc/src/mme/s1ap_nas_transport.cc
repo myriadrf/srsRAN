@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -81,6 +81,7 @@ void s1ap_nas_transport::init()
   m_nas_init.integ_algo     = m_s1ap->m_s1ap_args.integrity_algo;
   m_nas_init.cipher_algo    = m_s1ap->m_s1ap_args.encryption_algo;
   m_nas_init.request_imeisv = m_s1ap->m_s1ap_args.request_imeisv;
+  m_nas_init.lac            = m_s1ap->m_s1ap_args.lac;
 
   // Init NAS interface
   m_nas_if.s1ap = s1ap::get_instance();

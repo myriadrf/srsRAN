@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -59,13 +59,12 @@ public:
   /* see mac_interface.h for comments */
   void     new_grant_ul(uint32_t cc_idx, mac_grant_ul_t grant, tb_action_ul_t* action);
   void     new_grant_dl(uint32_t cc_idx, mac_grant_dl_t grant, tb_action_dl_t* action);
-  void     new_mch_dl(const srsran_pdsch_grant_t& phy_grant, tb_action_dl_t* action);
   void     tb_decoded(uint32_t cc_idx, mac_grant_dl_t grant, bool ack[SRSRAN_MAX_CODEWORDS]);
   void     bch_decoded_ok(uint32_t cc_idx, uint8_t* payload, uint32_t len);
   uint16_t get_dl_sched_rnti(uint32_t tti);
   uint16_t get_ul_sched_rnti(uint32_t tti);
 
-  void mch_decoded(uint32_t len, bool crc);
+  void mch_decoded(uint32_t len, bool crc, uint8_t* payload);
   void process_mch_pdu(uint32_t len);
 
   void set_mbsfn_config(uint32_t nof_mbsfn_services);
@@ -140,12 +139,12 @@ private:
 
   /* Buffers for PCH reception (not included in DL HARQ) */
   const static uint32_t  pch_payload_buffer_sz = 8 * 1024;
-  srsran_softbuffer_rx_t pch_softbuffer;
+  srsran_softbuffer_rx_t pch_softbuffer        = {};
   uint8_t                pch_payload_buffer[pch_payload_buffer_sz];
 
   /* Buffers for MCH reception (not included in DL HARQ) */
   const static uint32_t  mch_payload_buffer_sz = SRSRAN_MAX_BUFFER_SIZE_BYTES;
-  srsran_softbuffer_rx_t mch_softbuffer;
+  srsran_softbuffer_rx_t mch_softbuffer        = {};
   uint8_t                mch_payload_buffer[mch_payload_buffer_sz];
   srsran::mch_pdu        mch_msg;
 

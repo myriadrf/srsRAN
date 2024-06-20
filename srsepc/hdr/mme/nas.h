@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -142,6 +142,7 @@ typedef struct {
   srsran::CIPHERING_ALGORITHM_ID_ENUM cipher_algo;
   srsran::INTEGRITY_ALGORITHM_ID_ENUM integ_algo;
   bool                                request_imeisv;
+  uint16_t                            lac;
 } nas_init_t;
 
 typedef struct {
@@ -280,6 +281,7 @@ private:
   std::string m_full_net_name;
   std::string m_short_net_name;
   bool        m_request_imeisv = false;
+  uint16_t    m_lac            = 0;
 
   // Timers timeout values
   uint16_t m_t3413 = 0;

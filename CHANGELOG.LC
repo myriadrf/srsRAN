@@ -1,0 +1,4 @@
+LibreCellular Change Log for Releases (see also the upstream CHANGELOG)
+=======================================================================
+## 23.04LC01
+  * Force the fan on with LimeSDR USB

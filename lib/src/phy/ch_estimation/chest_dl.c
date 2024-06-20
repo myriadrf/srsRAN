@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -928,7 +928,7 @@ static float get_rsrp_neighbour_port(srsran_chest_dl_t* q, uint32_t port)
 static float get_rsrp(srsran_chest_dl_t* q)
 {
   float max = -1e9;
-  for (int i = 0; i < q->nof_rx_antennas; ++i) {
+  for (int i = 0; i < q->cell.nof_ports; ++i) {
     float v = get_rsrp_port(q, i);
     if (v > max) {
       max = v;

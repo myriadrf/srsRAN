@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -151,6 +151,21 @@ public:
 
     return ret;
   }
+  double get_ssb_freq_hz(uint32_t cc_idx)
+  {
+    double ret = 0.0;
+
+    if (cc_idx < cell_list_lte.size()) {
+      ret = cell_list_lte[cc_idx].dl_freq_hz;
+    }
+
+    cc_idx -= cell_list_lte.size();
+    if (cc_idx < cell_list_nr.size()) {
+      ret = cell_list_nr[cc_idx].carrier.ssb_center_freq_hz;
+    }
+
+    return ret;
+  }
   uint32_t get_rf_port(uint32_t cc_idx)
   {
     uint32_t ret = 0;
@@ -294,8 +309,9 @@ private:
   std::mutex             cell_gain_mutex;
 
   bool                    have_mtch_stop   = false;
-  pthread_mutex_t         mtch_mutex       = {};
-  pthread_cond_t          mtch_cvar        = {};
+  std::mutex              mtch_mutex;
+  std::mutex              mbsfn_mutex;
+  std::condition_variable mtch_cvar;
   srsran::phy_cfg_mbsfn_t mbsfn            = {};
   bool                    sib13_configured = false;
   bool                    mcch_configured  = false;

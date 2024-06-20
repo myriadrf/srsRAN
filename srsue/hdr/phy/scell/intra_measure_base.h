@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -280,7 +280,7 @@ private:
    * @param rx_gain_offset Provides last received rx_gain_offset
    * @return True if the measurement functions are executed without errors, otherwise false
    */
-  virtual bool measure_rat(measure_context_t context, std::vector<cf_t>& buffer, float rx_gain_offset) = 0;
+  virtual bool measure_rat(const measure_context_t& context, std::vector<cf_t>& buffer, float rx_gain_offset) = 0;
 
   /**
    * @brief Measurement process helper method. Encapsulates the neighbour cell measurement functionality

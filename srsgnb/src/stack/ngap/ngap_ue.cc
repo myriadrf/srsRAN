@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -257,6 +257,11 @@ bool ngap::ue::send_ue_context_release_request(asn1::ngap::cause_c cause)
 {
   if (not ngap_ptr->amf_connected) {
     logger.warning("AMF not connected");
+    return false;
+  }
+
+  if (not ctxt.amf_ue_ngap_id.has_value()) {
+    logger.warning("Can't send release request. User 0x%x has no AMF UE Id.", ctxt.rnti);
     return false;
   }
 

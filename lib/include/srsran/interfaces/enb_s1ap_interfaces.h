@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -42,6 +42,11 @@ struct s1ap_args_t {
   uint32_t    ts1_reloc_prep_timeout;
   uint32_t    ts1_reloc_overall_timeout;
   int32_t     max_s1_setup_retries;
+  uint32_t    s1_connect_timer;
+  bool        sctp_reuse_addr;
+  int32_t     sctp_rto_max;
+  int32_t     sctp_init_max_attempts;
+  int32_t     sctp_max_init_timeo;
 };
 
 // S1AP interface for RRC

@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -317,9 +317,9 @@ rrc_nr::connection_setup_proc::connection_setup_proc(srsue::rrc_nr& parent_) :
   rrc_handle(parent_), logger(srslog::fetch_basic_logger("RRC-NR"))
 {}
 
-srsran::proc_outcome_t rrc_nr::connection_setup_proc::init(const asn1::rrc_nr::radio_bearer_cfg_s radio_bearer_cfg_,
-                                                           const asn1::rrc_nr::cell_group_cfg_s   cell_group_,
-                                                           srsran::unique_byte_buffer_t           dedicated_info_nas_)
+srsran::proc_outcome_t rrc_nr::connection_setup_proc::init(const asn1::rrc_nr::radio_bearer_cfg_s& radio_bearer_cfg_,
+                                                           const asn1::rrc_nr::cell_group_cfg_s&   cell_group_,
+                                                           srsran::unique_byte_buffer_t            dedicated_info_nas_)
 {
   Info("Starting...");
 
@@ -333,13 +333,13 @@ srsran::proc_outcome_t rrc_nr::connection_setup_proc::init(const asn1::rrc_nr::r
   // Stop T300
   rrc_handle.t300.stop();
 
-  // Apply the Radio Bearer configuration
-  if (!rrc_handle.apply_radio_bearer_cfg(radio_bearer_cfg_)) {
+  // Apply the Cell Group configuration
+  if (!rrc_handle.update_cell_group_cfg(cell_group_)) {
     return proc_outcome_t::error;
   }
 
-  // Apply the Cell Group configuration
-  if (!rrc_handle.update_cell_group_cfg(cell_group_)) {
+  // Apply the Radio Bearer configuration
+  if (!rrc_handle.apply_radio_bearer_cfg(radio_bearer_cfg_)) {
     return proc_outcome_t::error;
   }
 
@@ -438,11 +438,6 @@ rrc_nr::cell_selection_proc::handle_cell_search_result(const rrc_interface_phy_n
   }
   if (mib.scs_common != srsran_subcarrier_spacing_15kHz) {
     Error("Unsupported SCS %s", srsran_subcarrier_spacing_to_str(mib.scs_common));
-    return proc_outcome_t::error;
-  }
-  // TODO: calculate SSB offset
-  if (mib.ssb_offset != 6) {
-    Error("Unsupported SSB offset %d", mib.ssb_offset);
     return proc_outcome_t::error;
   }
 

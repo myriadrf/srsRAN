@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -179,7 +179,7 @@ uint32_t rlc_am::read_pdu(uint8_t* payload, uint32_t nof_bytes)
   uint32_t read_bytes = tx_base->read_pdu(payload, nof_bytes);
 
   std::lock_guard<std::mutex> lock(metrics_mutex);
-  metrics.num_tx_pdus++;
+  metrics.num_tx_pdus += read_bytes > 0 ? 1 : 0;
   metrics.num_tx_pdu_bytes += read_bytes;
   return read_bytes;
 }
@@ -248,13 +248,19 @@ int rlc_am::rlc_am_base_tx::write_sdu(unique_byte_buffer_t sdu)
   uint32_t                                 nof_bytes = sdu->N_bytes;
   srsran::error_type<unique_byte_buffer_t> ret       = tx_sdu_queue.try_write(std::move(sdu));
   if (ret) {
-    RlcHexInfo(msg_ptr, nof_bytes, "Tx SDU (%d B, tx_sdu_queue_len=%d)", nof_bytes, tx_sdu_queue.size());
+    RlcHexInfo(msg_ptr,
+               nof_bytes,
+               "Tx SDU (%d B, PDCP_SN=%ld tx_sdu_queue_len=%d)",
+               nof_bytes,
+               sdu_pdcp_sn,
+               tx_sdu_queue.size());
   } else {
     // in case of fail, the try_write returns back the sdu
     RlcHexWarning(ret.error()->msg,
                   ret.error()->N_bytes,
-                  "[Dropped SDU] Tx SDU (%d B, tx_sdu_queue_len=%d)",
+                  "[Dropped SDU] Tx SDU (%d B, PDCP_SN=%ld, tx_sdu_queue_len=%d)",
                   ret.error()->N_bytes,
+                  sdu_pdcp_sn,
                   tx_sdu_queue.size());
     return SRSRAN_ERROR;
   }
@@ -273,6 +279,7 @@ void rlc_am::rlc_am_base_tx::discard_sdu(uint32_t discard_sn)
     if (sdu != nullptr && sdu->md.pdcp_sn == discard_sn) {
       tx_sdu_queue.queue.pop_func(sdu);
       sdu = nullptr;
+      return true;
     }
     return false;
   });

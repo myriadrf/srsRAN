@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -35,7 +35,6 @@
 #include <map>
 
 namespace srsran {
-
 /****************************************************************************
  * NR PDCP Entity
  * PDCP entity for 5G NR
@@ -49,7 +48,7 @@ public:
                  srsran::task_sched_handle  task_sched_,
                  srslog::basic_logger&      logger,
                  uint32_t                   lcid);
-  ~pdcp_entity_nr() final;
+  ~pdcp_entity_nr() final = default;
   bool configure(const pdcp_config_t& cnfg_) final;
   void reset() final;
   void reestablish() final;
@@ -62,12 +61,6 @@ public:
   void notify_delivery(const pdcp_sn_vector_t& pdcp_sns) final;
   void notify_failure(const pdcp_sn_vector_t& pdcp_sns) final;
 
-  // State variable setters (should be used only for testing)
-  void set_tx_next(uint32_t tx_next_) { tx_next = tx_next_; }
-  void set_rx_next(uint32_t rx_next_) { rx_next = rx_next_; }
-  void set_rx_deliv(uint32_t rx_deliv_) { rx_deliv = rx_deliv_; }
-  void set_rx_reord(uint32_t rx_reord_) { rx_reord = rx_reord_; }
-
   void get_bearer_state(pdcp_lte_state_t* state) override;
   void set_bearer_state(const pdcp_lte_state_t& state, bool set_fmc) override;
 
@@ -79,6 +72,17 @@ public:
 
   // State variable getters (useful for testing)
   uint32_t nof_discard_timers() { return discard_timers_map.size(); }
+  bool     is_reordering_timer_running() { return reordering_timer.is_running(); }
+
+  // State variable setters (should be used only for testing)
+  void     set_tx_next(uint32_t tx_next_) { tx_next = tx_next_; }
+  void     set_rx_next(uint32_t rx_next_) { rx_next = rx_next_; }
+  void     set_rx_deliv(uint32_t rx_deliv_) { rx_deliv = rx_deliv_; }
+  void     set_rx_reord(uint32_t rx_reord_) { rx_reord = rx_reord_; }
+  uint32_t get_tx_next() const { return tx_next; }
+  uint32_t get_rx_next() const { return rx_next; }
+  uint32_t get_rx_deliv() const { return rx_deliv; }
+  uint32_t get_rx_reord() const { return rx_reord; }
 
 private:
   srsue::rlc_interface_pdcp* rlc = nullptr;
@@ -113,6 +117,11 @@ private:
   // COUNT overflow protection
   bool tx_overflow = false;
   bool rx_overflow = false;
+
+  enum class rlc_mode_t {
+    UM,
+    AM,
+  } rlc_mode;
 };
 
 /*

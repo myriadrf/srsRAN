@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -160,6 +160,10 @@ static int parse_args(all_args_t* args, int argc, char* argv[])
     ("nas.force_imsi_attach", bpo::value<bool>(&args->stack.nas.force_imsi_attach)->default_value(false),  "Whether to always perform an IMSI attach")
     ("nas.eia",               bpo::value<string>(&args->stack.nas.eia)->default_value("1,2,3"),  "List of integrity algorithms included in UE capabilities")
     ("nas.eea",               bpo::value<string>(&args->stack.nas.eea)->default_value("0,1,2,3"),  "List of ciphering algorithms included in UE capabilities")
+
+    ("slicing.enable",        bpo::value<bool>(&args->stack.nas_5g.enable_slicing)->default_value(false),  "enable slicing in the UE")
+    ("slicing.nssai-sst",     bpo::value<int>(&args->stack.nas_5g.nssai_sst)->default_value(1),  "sst of requested slice")
+    ("slicing.nssai-sd",      bpo::value<int>(&args->stack.nas_5g.nssai_sd)->default_value(1),  "sd of requested slice")
 
     ("pcap.enable", bpo::value<string>(&args->stack.pkt_trace.enable)->default_value("none"), "Enable (MAC, MAC_NR, NAS) packet captures for wireshark")
     ("pcap.mac_filename", bpo::value<string>(&args->stack.pkt_trace.mac_pcap.filename)->default_value("/tmp/ue_mac.pcap"), "MAC layer capture filename")

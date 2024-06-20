@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -104,6 +104,7 @@ public:
   bool     configure(const rlc_config_t& cfg_) final;
   uint32_t read_pdu(uint8_t* payload, uint32_t nof_bytes) final;
   void     handle_control_pdu(uint8_t* payload, uint32_t nof_bytes) final;
+  void     handle_nack(const rlc_status_nack_t& nack, std::set<uint32_t>& retx_sn_set);
 
   void reestablish() final;
   void stop() final;
@@ -139,6 +140,7 @@ public:
 
   // Window helpers
   bool inside_tx_window(uint32_t sn) const;
+  bool valid_ack_sn(uint32_t sn) const;
 
 private:
   rlc_am*       parent = nullptr;
@@ -162,7 +164,7 @@ private:
   std::unique_ptr<rlc_ringbuffer_base<rlc_amd_tx_pdu_nr> > tx_window;
 
   // Queues, buffers and container
-  std::unique_ptr<pdu_retx_queue_base<rlc_amd_retx_nr_t> > retx_queue;
+  pdu_retx_queue_list<rlc_amd_retx_nr_t> retx_queue;
   uint32_t         sdu_under_segmentation_sn = INVALID_RLC_SN; // SN of the SDU currently being segmented.
   pdcp_sn_vector_t notify_info_vec;
 
@@ -188,6 +190,7 @@ public:
   void set_tx_state(const rlc_am_nr_tx_state_t& st_) { st = st_; }   // This should only be used for testing.
   rlc_am_nr_tx_state_t get_tx_state() { return st; }                 // This should only be used for testing.
   uint32_t get_tx_window_utilization() { return tx_window->size(); } // This should only be used for testing.
+  size_t   get_retx_queue_size() const { return retx_queue.size(); } // This should only be used for testing.
 
   // Debug Helpers
   void debug_state() const;
@@ -246,7 +249,8 @@ public:
   // Data handling methods
   int  handle_full_data_sdu(const rlc_am_nr_pdu_header_t& header, const uint8_t* payload, uint32_t nof_bytes);
   int  handle_segment_data_sdu(const rlc_am_nr_pdu_header_t& header, const uint8_t* payload, uint32_t nof_bytes);
-  bool inside_rx_window(uint32_t sn);
+  bool inside_rx_window(uint32_t sn) const;
+  bool valid_ack_sn(uint32_t sn) const;
   void write_to_upper_layers(uint32_t lcid, unique_byte_buffer_t sdu);
   void insert_received_segment(rlc_amd_rx_pdu_nr segment, rlc_amd_rx_sdu_nr_t::segment_list_t& segment_list) const;
   /**

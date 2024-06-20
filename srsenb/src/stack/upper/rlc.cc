@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -112,7 +112,7 @@ void rlc::clear_buffer(uint16_t rnti)
   pthread_rwlock_unlock(&rwlock);
 }
 
-void rlc::add_bearer(uint16_t rnti, uint32_t lcid, srsran::rlc_config_t cnfg)
+void rlc::add_bearer(uint16_t rnti, uint32_t lcid, const srsran::rlc_config_t& cnfg)
 {
   pthread_rwlock_rdlock(&rwlock);
   if (users.count(rnti)) {

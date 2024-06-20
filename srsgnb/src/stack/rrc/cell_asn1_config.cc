@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -428,25 +428,21 @@ void fill_nzp_csi_rs_from_enb_cfg(const rrc_nr_cfg_t& cfg, csi_meas_cfg_s& csi_m
 void fill_csi_resource_cfg_to_add(const rrc_nr_cfg_t& cfg, csi_meas_cfg_s& csi_meas_cfg)
 {
   if (cfg.cell_list[0].duplex_mode == SRSRAN_DUPLEX_MODE_FDD) {
-    csi_meas_cfg.csi_res_cfg_to_add_mod_list.resize(3);
+    csi_meas_cfg.csi_res_cfg_to_add_mod_list.resize(2);
 
-    csi_meas_cfg.csi_res_cfg_to_add_mod_list[0].csi_res_cfg_id = 0;
-    auto& nzp = csi_meas_cfg.csi_res_cfg_to_add_mod_list[0].csi_rs_res_set_list.set_nzp_csi_rs_ssb();
+    auto& res0          = csi_meas_cfg.csi_res_cfg_to_add_mod_list[0];
+    res0.csi_res_cfg_id = 0;
+    res0.bwp_id         = 0;
+    res0.res_type.value = csi_res_cfg_s::res_type_opts::periodic;
+    auto& nzp           = res0.csi_rs_res_set_list.set_nzp_csi_rs_ssb();
     nzp.nzp_csi_rs_res_set_list.push_back(0);
-    csi_meas_cfg.csi_res_cfg_to_add_mod_list[0].bwp_id         = 0;
-    csi_meas_cfg.csi_res_cfg_to_add_mod_list[0].res_type.value = csi_res_cfg_s::res_type_opts::periodic;
 
-    csi_meas_cfg.csi_res_cfg_to_add_mod_list[1].csi_res_cfg_id = 1;
-    auto& im_res = csi_meas_cfg.csi_res_cfg_to_add_mod_list[1].csi_rs_res_set_list.set_csi_im_res_set_list();
-    im_res.push_back(0);
-    csi_meas_cfg.csi_res_cfg_to_add_mod_list[1].bwp_id         = 0;
-    csi_meas_cfg.csi_res_cfg_to_add_mod_list[1].res_type.value = csi_res_cfg_s::res_type_opts::periodic;
-
-    csi_meas_cfg.csi_res_cfg_to_add_mod_list[2].csi_res_cfg_id = 2;
-    auto& nzp2 = csi_meas_cfg.csi_res_cfg_to_add_mod_list[2].csi_rs_res_set_list.set_nzp_csi_rs_ssb();
+    auto& res2          = csi_meas_cfg.csi_res_cfg_to_add_mod_list[1];
+    res2.csi_res_cfg_id = 1;
+    res2.bwp_id         = 0;
+    res2.res_type.value = csi_res_cfg_s::res_type_opts::periodic;
+    auto& nzp2          = res2.csi_rs_res_set_list.set_nzp_csi_rs_ssb();
     nzp2.nzp_csi_rs_res_set_list.push_back(1);
-    csi_meas_cfg.csi_res_cfg_to_add_mod_list[2].bwp_id         = 0;
-    csi_meas_cfg.csi_res_cfg_to_add_mod_list[2].res_type.value = csi_res_cfg_s::res_type_opts::periodic;
   }
 }
 
@@ -498,9 +494,6 @@ int fill_csi_meas_from_enb_cfg(const rrc_nr_cfg_t& cfg, csi_meas_cfg_s& csi_meas
   fill_nzp_csi_rs_from_enb_cfg(cfg, csi_meas_cfg);
 
   if (cfg.is_standalone) {
-    // CSI IM config
-    fill_csi_im_resource_cfg_to_add(cfg, csi_meas_cfg);
-
     // CSI report config
     fill_csi_report_from_enb_cfg(cfg, csi_meas_cfg);
   }
@@ -956,19 +949,35 @@ void fill_srb(const rrc_nr_cfg_t& cfg, srsran::nr_srb srb_id, asn1::rrc_nr::rlc_
   out.served_radio_bearer_present      = true;
   out.served_radio_bearer.set_srb_id() = (uint8_t)srb_id;
 
-  out.rlc_cfg_present           = true;
-  auto& ul_am                   = out.rlc_cfg.set_am().ul_am_rlc;
-  ul_am.sn_field_len_present    = true;
-  ul_am.sn_field_len.value      = asn1::rrc_nr::sn_field_len_am_opts::size12;
-  ul_am.t_poll_retx.value       = asn1::rrc_nr::t_poll_retx_opts::ms45;
-  ul_am.poll_pdu.value          = asn1::rrc_nr::poll_pdu_opts::infinity;
-  ul_am.poll_byte.value         = asn1::rrc_nr::poll_byte_opts::infinity;
-  ul_am.max_retx_thres.value    = asn1::rrc_nr::ul_am_rlc_s::max_retx_thres_opts::t8;
-  auto& dl_am                   = out.rlc_cfg.am().dl_am_rlc;
-  dl_am.sn_field_len_present    = true;
-  dl_am.sn_field_len.value      = asn1::rrc_nr::sn_field_len_am_opts::size12;
-  dl_am.t_reassembly.value      = t_reassembly_opts::ms35;
-  dl_am.t_status_prohibit.value = asn1::rrc_nr::t_status_prohibit_opts::ms0;
+  if (srb_id == srsran::nr_srb::srb1) {
+    if (cfg.srb1_cfg.present) {
+      out.rlc_cfg_present = true;
+      out.rlc_cfg         = cfg.srb1_cfg.rlc_cfg;
+    } else {
+      out.rlc_cfg_present = false;
+    }
+  } else if (srb_id == srsran::nr_srb::srb2) {
+    if (cfg.srb2_cfg.present) {
+      out.rlc_cfg_present = true;
+      out.rlc_cfg         = cfg.srb2_cfg.rlc_cfg;
+    } else {
+      out.rlc_cfg_present = false;
+    }
+  } else {
+    out.rlc_cfg_present           = true;
+    auto& ul_am                   = out.rlc_cfg.set_am().ul_am_rlc;
+    ul_am.sn_field_len_present    = true;
+    ul_am.sn_field_len.value      = asn1::rrc_nr::sn_field_len_am_opts::size12;
+    ul_am.t_poll_retx.value       = asn1::rrc_nr::t_poll_retx_opts::ms45;
+    ul_am.poll_pdu.value          = asn1::rrc_nr::poll_pdu_opts::infinity;
+    ul_am.poll_byte.value         = asn1::rrc_nr::poll_byte_opts::infinity;
+    ul_am.max_retx_thres.value    = asn1::rrc_nr::ul_am_rlc_s::max_retx_thres_opts::t8;
+    auto& dl_am                   = out.rlc_cfg.am().dl_am_rlc;
+    dl_am.sn_field_len_present    = true;
+    dl_am.sn_field_len.value      = asn1::rrc_nr::sn_field_len_am_opts::size12;
+    dl_am.t_reassembly.value      = t_reassembly_opts::ms35;
+    dl_am.t_status_prohibit.value = asn1::rrc_nr::t_status_prohibit_opts::ms0;
+  }
 
   // mac-LogicalChannelConfig -- Cond LCH-Setup
   out.mac_lc_ch_cfg_present                    = true;
@@ -1082,7 +1091,7 @@ int fill_mib_from_enb_cfg(const rrc_cell_cfg_nr_t& cell_cfg, asn1::rrc_nr::mib_s
     default:
       srsran_terminate("Invalid carrier SCS=%d Hz", SRSRAN_SUBC_SPACING_NR(cell_cfg.phy_cell.carrier.scs));
   }
-  mib.ssb_subcarrier_offset            = 6; // TODO: currently hard-coded
+  mib.ssb_subcarrier_offset            = cell_cfg.ssb_offset;
   mib.dmrs_type_a_position.value       = mib_s::dmrs_type_a_position_opts::pos2;
   mib.pdcch_cfg_sib1.search_space_zero = 0;
   mib.pdcch_cfg_sib1.ctrl_res_set_zero = cell_cfg.coreset0_idx;
@@ -1324,11 +1333,11 @@ bool compute_diff_radio_bearer_cfg(const rrc_nr_cfg_t&       cfg,
          diff.drb_to_add_mod_list.size() > 0;
 }
 
-void fill_cellgroup_with_radio_bearer_cfg(const rrc_nr_cfg_t&                     cfg,
-                                          const uint32_t                          rnti,
-                                          const enb_bearer_manager&               bearer_mapper,
-                                          const asn1::rrc_nr::radio_bearer_cfg_s& bearers,
-                                          asn1::rrc_nr::cell_group_cfg_s&         out)
+int fill_cellgroup_with_radio_bearer_cfg(const rrc_nr_cfg_t&                     cfg,
+                                         const uint32_t                          rnti,
+                                         const enb_bearer_manager&               bearer_mapper,
+                                         const asn1::rrc_nr::radio_bearer_cfg_s& bearers,
+                                         asn1::rrc_nr::cell_group_cfg_s&         out)
 {
   out.rlc_bearer_to_add_mod_list.clear();
   out.rlc_bearer_to_release_list.clear();
@@ -1341,15 +1350,21 @@ void fill_cellgroup_with_radio_bearer_cfg(const rrc_nr_cfg_t&                   
   // Add DRBs
   for (const drb_to_add_mod_s& drb : bearers.drb_to_add_mod_list) {
     out.rlc_bearer_to_add_mod_list.push_back({});
-    uint32_t                           lcid = drb.drb_id + (int)srsran::nr_srb::count - 1;
+    uint32_t                           lcid = drb.drb_id + srsran::MAX_NR_SRB_ID;
     enb_bearer_manager::radio_bearer_t rb   = bearer_mapper.get_lcid_bearer(rnti, lcid);
-    fill_drb(cfg, rb, (srsran::nr_drb)drb.drb_id, out.rlc_bearer_to_add_mod_list.back());
+    if (rb.is_valid() and cfg.five_qi_cfg.find(rb.five_qi) != cfg.five_qi_cfg.end()) {
+      fill_drb(cfg, rb, (srsran::nr_drb)drb.drb_id, out.rlc_bearer_to_add_mod_list.back());
+    } else {
+      return SRSRAN_ERROR;
+    }
   }
 
   // Release DRBs
   for (uint8_t drb_id : bearers.drb_to_release_list) {
     out.rlc_bearer_to_release_list.push_back(drb_id);
   }
+
+  return SRSRAN_SUCCESS;
 }
 
 } // namespace srsenb

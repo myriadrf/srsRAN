@@ -1,5 +1,5 @@
 #
-# Copyright 2013-2022 Software Radio Systems Limited
+# Copyright 2013-2023 Software Radio Systems Limited
 #
 # This file is part of srsRAN
 #
@@ -32,6 +32,9 @@ add_test(dft_norm dft_test -n)    # Normalize each transform
 add_test(dft_dc dft_test -b -d)   # Backwards first & handle dc internally
 add_test(dft_odd dft_test -N 255) # Odd-length
 add_test(dft_odd_dc dft_test -N 255 -b -d) # Odd-length, backwards first, handle dc
+
+add_executable(freq_est_test freq_est_test.c)
+target_link_libraries(freq_est_test srsran_phy)
 
 ########################################################################
 # Algebra TEST

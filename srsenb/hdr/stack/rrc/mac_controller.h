@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -70,6 +70,7 @@ public:
   bool            is_crnti_set() const { return crnti_set; }
 
   void set_scell_activation(const std::bitset<SRSRAN_MAX_CARRIERS>& scell_mask);
+  void set_srb2_activation(bool active);
   void set_drb_activation(bool active);
 
   void update_mac();

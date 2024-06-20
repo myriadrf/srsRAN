@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -65,6 +65,8 @@ struct bwp_slot_grid {
 
   explicit bwp_slot_grid(const bwp_params_t& bwp_params, uint32_t slot_idx_);
   void reset();
+
+  void reserve_pdsch(const prb_grant& grant) { pdschs.reserve_prbs(grant); }
 
   bool is_dl() const { return cfg->slots[slot_idx].is_dl; }
   bool is_ul() const { return cfg->slots[slot_idx].is_ul; }

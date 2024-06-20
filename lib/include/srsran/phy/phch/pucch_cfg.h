@@ -1,5 +1,5 @@
 /**
- * Copyright 2013-2022 Software Radio Systems Limited
+ * Copyright 2013-2023 Software Radio Systems Limited
  *
  * This file is part of srsRAN.
  *
@@ -78,6 +78,7 @@ typedef struct SRSRAN_API {
   float threshold_data_valid_format3;
   float threshold_dmrs_detection;
   bool  meas_ta_en;
+  bool  use_cedron_alg;
 
   // PUCCH configuration generated during a call to encode/decode
   srsran_pucch_format_t format;
