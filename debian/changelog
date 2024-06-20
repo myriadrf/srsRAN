@@ -1,3 +1,9 @@
+srsran (23.11LC01) unstable; urgency=low
+
+  * Rebase LibreCellular fork on upstream srsRAN 23.11.
+
+ -- Andrew Back <andrew@abopen.com>  Thu, 20 Jun 2024 20:00:00 +0100
+
 srsran (22.04LC01) unstable; urgency=low
 
   * srsRAN 22.04 native lime: driver fixes and disable plugins.
