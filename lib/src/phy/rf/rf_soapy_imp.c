@@ -76,7 +76,7 @@ typedef struct {
   uint32_t num_stream_curruption;
 } rf_soapy_handler_t;
 
-cf_t zero_mem[64 * 1024];
+static cf_t zero_mem[64 * 1024];
 
 static void log_overflow(rf_soapy_handler_t* h)
 {
