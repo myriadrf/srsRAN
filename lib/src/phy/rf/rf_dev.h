@@ -52,6 +52,16 @@ static srsran_rf_plugin_t plugin_lime  = {"", NULL, &srsran_rf_dev_lime};
 #endif
 #endif
 
+/* Define implementation for LimeSuiteNG */
+#ifdef ENABLE_LIMESUITENG
+#ifdef ENABLE_RF_PLUGINS
+static srsran_rf_plugin_t plugin_limesuiteng = {"libsrsran_rf_limesuiteng.so", NULL, NULL};
+#else
+#include "rf_limesuiteng_imp.h"
+static srsran_rf_plugin_t plugin_limesuiteng = {"", NULL, &srsran_rf_dev_limesuiteng};
+#endif
+#endif
+
 /* Define implementation for SoapySDR */
 #ifdef ENABLE_SOAPYSDR
 #ifdef ENABLE_RF_PLUGINS
@@ -126,6 +136,9 @@ static srsran_rf_plugin_t* rf_plugins[] = {
 #endif
 #ifdef ENABLE_LIMESDR
     &plugin_lime,
+#endif
+#ifdef ENABLE_LIMESUITENG
+    &plugin_limesuiteng,
 #endif
 #ifdef ENABLE_DUMMY_DEV
     &plugin_dummy,

@@ -75,6 +75,7 @@ option(ENABLE_BLADERF        "Enable BladeRF"                           ON)
 option(ENABLE_SOAPYSDR       "Enable SoapySDR"                          ON)
 option(ENABLE_SKIQ           "Enable Sidekiq SDK"                       ON)
 option(ENABLE_LIMESDR        "Enable LimeSDR"                           ON)
+option(ENABLE_LIMESUITENG    "Enable LimeSuiteNG"                       ON)
 option(ENABLE_ZEROMQ         "Enable ZeroMQ"                            ON)
 option(ENABLE_HARDSIM        "Enable support for SIM cards"             ON)
 
@@ -244,6 +245,15 @@ if(ENABLE_LIMESDR)
   endif(LIMESDR_FOUND)
 endif(ENABLE_LIMESDR)
 
+# LimeSDR
+if(ENABLE_LIMESUITENG)
+  find_package(limesuiteng REQUIRED)
+  if(limesuiteng_FOUND)
+    include_directories(${limesuiteng_INCLUDE_DIRS})
+    link_directories(${LIMESUITENG_LIBRARY_DIRS})
+  endif(limesuiteng_FOUND)
+endif(ENABLE_LIMESUITENG)
+
 # Soapy
 if(ENABLE_SOAPYSDR)
   find_package(SoapySDR)
@@ -267,12 +277,12 @@ if(ENABLE_TIMEPROF)
     add_definitions(-DENABLE_TIMEPROF)
 endif(ENABLE_TIMEPROF)
 
-if(BLADERF_FOUND OR UHD_FOUND OR SOAPYSDR_FOUND OR ZEROMQ_FOUND OR SKIQ_FOUND OR LIMESDR_FOUND)
+if(BLADERF_FOUND OR UHD_FOUND OR SOAPYSDR_FOUND OR ZEROMQ_FOUND OR SKIQ_FOUND OR LIMESDR_FOUND OR limesuiteng_FOUND)
   set(RF_FOUND TRUE CACHE INTERNAL "RF frontend found")
-else(BLADERF_FOUND OR UHD_FOUND OR SOAPYSDR_FOUND OR ZEROMQ_FOUND OR SKIQ_FOUND LIMESDR_FOUND)
+else(BLADERF_FOUND OR UHD_FOUND OR SOAPYSDR_FOUND OR ZEROMQ_FOUND OR SKIQ_FOUND LIMESDR_FOUND OR limesuiteng_FOUND)
   set(RF_FOUND FALSE CACHE INTERNAL "RF frontend found")
   add_definitions(-DDISABLE_RF)
-endif(BLADERF_FOUND OR UHD_FOUND OR SOAPYSDR_FOUND OR ZEROMQ_FOUND OR SKIQ_FOUND OR LIMESDR_FOUND)
+endif(BLADERF_FOUND OR UHD_FOUND OR SOAPYSDR_FOUND OR ZEROMQ_FOUND OR SKIQ_FOUND OR LIMESDR_FOUND OR limesuiteng_FOUND)
 
 # Boost
 if(BUILD_STATIC)
