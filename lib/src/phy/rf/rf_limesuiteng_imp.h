@@ -103,7 +103,7 @@ SRSRAN_API int rf_limesuiteng_send_timed(void*  h,
                                          bool   is_end_of_burst);
 
 int rf_limesuiteng_send_timed_multi(void*  h,
-                                    void*  data[4],
+                                    void** data,
                                     int    nsamples,
                                     time_t secs,
                                     double frac_secs,

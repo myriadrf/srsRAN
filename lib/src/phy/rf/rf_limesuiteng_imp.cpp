@@ -40,11 +40,13 @@ using namespace lime;
 typedef struct {
   const char*        devname;
   LimePluginContext* context;
+  LimeRuntimeParameters state;
 
   double                    tx_rate;
   double                    rx_rate;
   srsran_rf_error_handler_t lime_error_handler;
   void*                     lime_error_handler_arg;
+  bool                      isStreaming;
 
 } rf_limesuiteng_handler_t;
 
@@ -90,7 +92,14 @@ int rf_limesuiteng_start_rx_stream(void* h, bool now)
 {
   rf_limesuiteng_handler_t* handler = (rf_limesuiteng_handler_t*)h;
   LimePluginContext*        lime    = handler->context;
-  int                       status  = LimePlugin_Start(lime);
+
+  // Apply all collected settings
+  int status = LimePlugin_Setup(lime, &handler->state);
+  if (status != 0)
+    return SRSRAN_ERROR;
+
+  status               = LimePlugin_Start(lime);
+  handler->isStreaming = true;
   return status == 0 ? SRSRAN_SUCCESS : SRSRAN_ERROR_CANT_START;
 }
 
@@ -99,6 +108,7 @@ int rf_limesuiteng_stop_rx_stream(void* h)
   rf_limesuiteng_handler_t* handler = (rf_limesuiteng_handler_t*)h;
   LimePluginContext*        lime    = handler->context;
   int                       status  = LimePlugin_Stop(lime);
+  handler->isStreaming              = false;
   return status == 0 ? SRSRAN_SUCCESS : SRSRAN_ERROR;
 }
 
@@ -141,14 +151,12 @@ private:
 
   void argsToMap(const std::string& args)
   {
-    std::map<std::string, std::string> kwmap;
-
     bool        inKey = true;
     std::string key, val;
     for (size_t i = 0; i < args.size(); i++) {
       const char ch = args[i];
       if (inKey) {
-        if (ch == '=')
+        if (ch == ':')
           inKey = false;
         else if (ch == ',')
           inKey = true;
@@ -163,8 +171,13 @@ private:
       if ((inKey && !val.empty()) || ((i + 1) == args.size())) {
         key = trim(key);
         val = trim(val);
-        if (!key.empty())
-          kwmap[key] = val;
+        printf("Key:Value{ %s:%s }\n", key.c_str(), val.c_str());
+        if (!key.empty()) {
+          if (val[0] == '"')
+            strings[key] = val.substr(1, val.size() - 2);
+          else
+            numbers[key] = stod(val);
+        }
         key = "";
         val = "";
       }
@@ -176,9 +189,11 @@ public:
 
   bool GetString(std::string& dest, const char* varname) override
   {
-    auto iter = strings.find(varname);
+    auto iter = strings.find(std::string(varname));
     if (iter == strings.end())
       return false;
+
+    printf("provided: %s\n", varname);
 
     dest = iter->second;
     return true;
@@ -209,6 +224,11 @@ int rf_limesuiteng_open_multi(char* args, void** h, uint32_t num_requested_chann
   // lime->currentWorkingDirectory = std::string(hostState->path);
   lime->samplesFormat = DataFormat::F32;
 
+  handler->context     = lime;
+  handler->devname     = "LimeSDR";
+  handler->isStreaming = false;
+  *h                   = handler;
+
   srsRAN_ParamProvider configProvider(args);
 
   // gathers arguments and initializes devices
@@ -216,29 +236,24 @@ int rf_limesuiteng_open_multi(char* args, void** h, uint32_t num_requested_chann
     return SRSRAN_ERROR;
 
   // runtime decided arguments
-  LimeRuntimeParameters state;
 
   int rxCount = num_requested_channels;
   int txCount = num_requested_channels;
 
   for (int ch = 0; ch < rxCount; ++ch) {
-    state.rx.freq.push_back(1e9);
-    state.rx.gain.push_back(0);
-    state.rx.bandwidth.push_back(20e6);
+    handler->state.rx.freq.push_back(1e9);
+    handler->state.rx.gain.push_back(25);
+    handler->state.rx.bandwidth.push_back(20e6);
   }
 
   for (int ch = 0; ch < txCount; ++ch) {
-    state.tx.freq.push_back(1e9);
-    state.tx.gain.push_back(0);
-    state.tx.bandwidth.push_back(20e6);
+    handler->state.tx.freq.push_back(1e9);
+    handler->state.tx.gain.push_back(40);
+    handler->state.tx.bandwidth.push_back(20e6);
   }
 
   double sample_rate = 20e6;
-  state.rf_ports.push_back({sample_rate, rxCount, txCount});
-
-  int status = LimePlugin_Setup(lime, &state);
-  if (status != 0)
-    return SRSRAN_ERROR;
+  handler->state.rf_ports.push_back({sample_rate, rxCount, txCount});
 
   return SRSRAN_SUCCESS;
 }
@@ -261,6 +276,18 @@ static double rf_limesuiteng_set_srate(void* h, double rate, lime::TRXDir dir)
 {
   rf_limesuiteng_handler_t* handler = (rf_limesuiteng_handler_t*)h;
   LimePluginContext*        lime    = handler->context;
+
+  if (!handler->isStreaming) {
+    handler->state.rf_ports[0].sample_rate = rate;
+    handler->rx_rate                       = rate;
+    handler->tx_rate                       = rate;
+
+    for (auto& bw : handler->state.rx.bandwidth)
+      bw = rate;
+    for (auto& bw : handler->state.tx.bandwidth)
+      bw = rate;
+    return rate;
+  }
 
   int      channelIndex = 0;
   int      oversample   = 0;
@@ -316,6 +343,11 @@ int rf_limesuiteng_set_rx_gain_ch(void* h, uint32_t ch, double gain)
 {
   rf_limesuiteng_handler_t* handler = (rf_limesuiteng_handler_t*)h;
   LimePluginContext*        lime    = handler->context;
+  if (!handler->isStreaming) {
+    handler->state.rx.gain.at(ch) = gain;
+    return SRSRAN_SUCCESS;
+  }
+
   LimePlugin_SetRxGain(lime, gain, ch);
   return SRSRAN_SUCCESS;
 }
@@ -335,6 +367,10 @@ int rf_limesuiteng_set_tx_gain_ch(void* h, uint32_t ch, double gain)
 {
   rf_limesuiteng_handler_t* handler = (rf_limesuiteng_handler_t*)h;
   LimePluginContext*        lime    = handler->context;
+  if (!handler->isStreaming) {
+    handler->state.tx.gain.at(ch) = gain;
+    return SRSRAN_SUCCESS;
+  }
   LimePlugin_SetTxGain(lime, gain, ch);
   return SRSRAN_SUCCESS;
 }
@@ -374,6 +410,15 @@ static double rf_limesuiteng_set_freq(void* h, uint32_t ch, double freq, TRXDir 
 {
   rf_limesuiteng_handler_t* handler     = (rf_limesuiteng_handler_t*)h;
   LimePluginContext*        lime        = handler->context;
+
+  if (!handler->isStreaming) {
+    if (dir == TRXDir::Rx)
+      handler->state.rx.freq.at(ch) = freq;
+    else
+      handler->state.tx.freq.at(ch) = freq;
+    return freq;
+  }
+
   auto&                     channels    = dir == TRXDir::Rx ? lime->rxChannels : lime->txChannels;
   int                       chipChannel = channels.at(ch).chipChannel;
   int                       chipIndex   = channels.at(ch).parent->chipIndex;
@@ -405,6 +450,10 @@ static void timestamp_to_secs(double rate, uint64_t timestamp, time_t* secs, dou
 void rf_limesuiteng_get_time(void* h, time_t* secs, double* frac_secs)
 {
   rf_limesuiteng_handler_t* handler = (rf_limesuiteng_handler_t*)h;
+  if (secs && frac_secs) {
+    *secs      = (time_t)0;
+    *frac_secs = 0.1;
+  }
   // TODO:
   // lms_stream_status_t status;
   // if (handler->rx_stream_active) {
@@ -465,7 +514,7 @@ int rf_limesuiteng_send_timed(void*  h,
 }
 
 int rf_limesuiteng_send_timed_multi(void*  h,
-                                    void*  data[SRSRAN_MAX_PORTS],
+                                    void** data,
                                     int    nsamples,
                                     time_t secs,
                                     double frac_secs,
@@ -485,6 +534,10 @@ int rf_limesuiteng_send_timed_multi(void*  h,
   if (has_time_spec) {
     srsran_timestamp_t time = {secs, frac_secs};
     meta.timestamp          = srsran_timestamp_uint64(&time, handler->tx_rate);
+    if (secs < 0)
+      return SRSRAN_ERROR;
+    if (isnan(frac_secs))
+      return SRSRAN_ERROR;
   }
 
   lime::complex32f_t* src[SRSRAN_MAX_CHANNELS] = {};
@@ -493,6 +546,7 @@ int rf_limesuiteng_send_timed_multi(void*  h,
 
   int samplesSent =
       LimePlugin_Write_complex32f(lime, reinterpret_cast<const lime::complex32f_t* const*>(src), nsamples, 0, meta);
+
   if (samplesSent < 0)
     return SRSRAN_ERROR;
 
