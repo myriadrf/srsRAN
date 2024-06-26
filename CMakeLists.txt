@@ -245,9 +245,9 @@ if(ENABLE_LIMESDR)
   endif(LIMESDR_FOUND)
 endif(ENABLE_LIMESDR)
 
-# LimeSDR
+# LimeSuiteNG
 if(ENABLE_LIMESUITENG)
-  find_package(limesuiteng REQUIRED)
+  find_package(limesuiteng)
   if(limesuiteng_FOUND)
     include_directories(${limesuiteng_INCLUDE_DIRS})
     link_directories(${LIMESUITENG_LIBRARY_DIRS})
