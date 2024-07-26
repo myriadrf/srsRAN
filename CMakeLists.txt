@@ -247,11 +247,7 @@ endif(ENABLE_LIMESDR)
 
 # LimeSuiteNG
 if(ENABLE_LIMESUITENG)
-  find_package(limesuiteng)
-  if(limesuiteng_FOUND)
-    include_directories(${limesuiteng_INCLUDE_DIRS})
-    link_directories(${LIMESUITENG_LIBRARY_DIRS})
-  endif(limesuiteng_FOUND)
+  find_package(limesuiteng) # uses imported cmake targets
 endif(ENABLE_LIMESUITENG)
 
 # Soapy

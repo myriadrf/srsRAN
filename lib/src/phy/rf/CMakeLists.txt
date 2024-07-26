@@ -135,7 +135,7 @@ if(RF_FOUND)
       add_library(srsran_rf_limesuiteng STATIC ${SOURCES_LIMESUITENG})
       list(APPEND STATIC_PLUGINS srsran_rf_limesuiteng)
     endif (ENABLE_RF_PLUGINS)
-    target_link_libraries(srsran_rf_limesuiteng srsran_rf_utils srsran_phy ${limesuiteng_LIBRARIES} limesuiteng)
+    target_link_libraries(srsran_rf_limesuiteng srsran_rf_utils srsran_phy limesuiteng::limesuiteng)
     install(TARGETS srsran_rf_limesuiteng DESTINATION ${LIBRARY_DIR} OPTIONAL)
   endif (limesuiteng_FOUND AND ENABLE_LIMESUITENG)
 
